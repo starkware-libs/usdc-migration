@@ -7,6 +7,7 @@ pub mod USDCMigration {
     use usdc_migration::errors::USDCMigrationError;
     use usdc_migration::events::USDCMigrationEvents;
     use usdc_migration::interface::IUSDCMigration;
+    use usdc_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 
     #[storage]
     struct Storage {
@@ -22,6 +23,12 @@ pub mod USDCMigration {
         owner_l2_address: ContractAddress,
         /// Token bridge address.
         starkgate_address: ContractAddress,
+        /// Threshold for recycling.
+        threshold: u256,
+        /// Amount to send to L1 per recycle.
+        l1_transfer_unit: u256,
+        /// L1 USDC token address.
+        l1_usdc_token_address: EthAddress,
     }
 
     #[event]
@@ -73,7 +80,43 @@ pub mod USDCMigration {
             native_token_dispatcher.transfer(recipient: caller_address, :amount);
 
             self.emit(USDCMigrationEvents::USDCMigratedEvent { amount, user: caller_address });
-            // TODO: send to l1 if threshold is reached.
+            self._recycle(:contract_address);
+        }
+
+        fn recycle(ref self: ContractState) {
+            let contract_address = get_contract_address();
+            self._recycle(:contract_address);
+        }
+    }
+
+    #[generate_trait]
+    impl InternalUSDCMigration of InternalUSDCMigrationTrait {
+        fn _recycle(self: @ContractState, contract_address: ContractAddress) {
+            let legacy_token_dispatcher = IERC20Dispatcher {
+                contract_address: self.legacy_token.read(),
+            };
+            let legacy_balance = legacy_token_dispatcher.balance_of(account: contract_address);
+            if (legacy_balance >= self.threshold.read()) {
+                self.send_units_to_l1(amount: legacy_balance);
+            }
+        }
+
+        fn send_units_to_l1(self: @ContractState, mut amount: u256) {
+            let starkgate_dispatcher = ITokenBridgeDispatcher {
+                contract_address: self.starkgate_address.read(),
+            };
+            let l1_recipient = self.l1_recipient.read();
+            let l1_usdc_token_address = self.l1_usdc_token_address.read();
+            let l1_transfer_unit = self.l1_transfer_unit.read();
+            let threshold = self.threshold.read();
+
+            while (amount >= threshold) {
+                starkgate_dispatcher
+                    .initiate_token_withdraw(
+                        l1_token: l1_usdc_token_address, :l1_recipient, :amount,
+                    );
+                amount -= l1_transfer_unit;
+            }
         }
     }
 }

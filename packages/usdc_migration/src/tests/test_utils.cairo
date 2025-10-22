@@ -1,13 +1,14 @@
 use constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS,
-    STARKGATE_ADDRESS,
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
+    OWNER_ADDRESS,
 };
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
     ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait, set_balance,
 };
 use starknet::{ContractAddress, EthAddress};
-use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
+use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
+use usdc_migration::interface::{IUSDCMigrationDispatcher, IUSDCMigrationDispatcherTrait};
 
 #[derive(Debug, Drop, Copy)]
 pub(crate) struct USDCMigrationCfg {
@@ -37,8 +38,8 @@ pub(crate) mod constants {
     pub fn L1_RECIPIENT() -> EthAddress {
         'L1_RECIPIENT'.try_into().unwrap()
     }
-    pub fn STARKGATE_ADDRESS() -> ContractAddress {
-        'STARKGATE_ADDRESS'.try_into().unwrap()
+    pub fn L1_TOKEN_ADDRESS() -> EthAddress {
+        'L1_TOKEN_ADDRESS'.try_into().unwrap()
     }
 }
 
@@ -82,13 +83,15 @@ fn deploy_tokens() -> (Token, Token) {
 
 pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     let (legacy_token, new_token) = deploy_tokens();
+    let starkgate_address = deploy_token_bridge_mock(:legacy_token);
     let mut calldata = ArrayTrait::new();
     legacy_token.contract_address().serialize(ref calldata);
     new_token.contract_address().serialize(ref calldata);
     L1_RECIPIENT().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
-    STARKGATE_ADDRESS().serialize(ref calldata);
+    starkgate_address.serialize(ref calldata);
     LEGACY_THRESHOLD.serialize(ref calldata);
+    L1_TOKEN_ADDRESS().serialize(ref calldata);
     let usdc_migration_contract = snforge_std::declare("USDCMigration").unwrap().contract_class();
     let (usdc_migration_contract_address, _) = usdc_migration_contract.deploy(@calldata).unwrap();
     // Return the configuration with the deployed contract address.
@@ -98,8 +101,21 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
         new_token,
         l1_recipient: L1_RECIPIENT(),
         owner: OWNER_ADDRESS(),
-        starkgate_address: STARKGATE_ADDRESS(),
+        starkgate_address,
     }
+}
+
+pub(crate) fn deploy_token_bridge_mock(legacy_token: Token) -> ContractAddress {
+    let mut calldata = ArrayTrait::new();
+    L1_TOKEN_ADDRESS().serialize(ref calldata);
+    legacy_token.contract_address().serialize(ref calldata);
+    let token_bridge_mock_contract = snforge_std::declare("TokenBridgeMock")
+        .unwrap()
+        .contract_class();
+    let (token_bridge_mock_contract_address, _) = token_bridge_mock_contract
+        .deploy(@calldata)
+        .unwrap();
+    token_bridge_mock_contract_address
 }
 
 pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, legacy_supply: u256) -> ContractAddress {
@@ -132,6 +148,17 @@ pub(crate) fn load_u256(target: ContractAddress, storage_address: felt252) -> u2
     let low = (*value[0]).try_into().unwrap();
     let high = (*value[1]).try_into().unwrap();
     u256 { low, high }
+}
+
+pub(crate) fn approve_and_swap(
+    migration_contract: ContractAddress, user: ContractAddress, amount: u256, token: Token,
+) {
+    let legacy_token_address = token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
+    legacy_dispatcher.approve(spender: migration_contract, :amount);
+    cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
+    IUSDCMigrationDispatcher { contract_address: migration_contract }.swap_to_new(:amount);
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

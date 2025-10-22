@@ -17,7 +17,7 @@ use starkware_utils_testing::test_utils::{
     cheat_caller_address_once,
 };
 use usdc_migration::errors::Errors;
-use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
+use usdc_migration::events::USDCMigrationEvents::{SentToL1, USDCMigrated};
 use usdc_migration::interface::{
     IUSDCMigrationAdminDispatcher, IUSDCMigrationAdminDispatcherTrait,
     IUSDCMigrationAdminSafeDispatcher, IUSDCMigrationAdminSafeDispatcherTrait,
@@ -28,8 +28,8 @@ use usdc_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, LEGACY_THRESHOLD,
 };
 use usdc_migration::tests::test_utils::{
-    deploy_usdc_migration, generic_test_fixture, load_contract_address, load_u256, new_user,
-    supply_contract,
+    approve_and_swap, deploy_usdc_migration, generic_test_fixture, load_contract_address, load_u256,
+    new_user, supply_contract,
 };
 use usdc_migration::usdc_migration::USDCMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
 
@@ -56,7 +56,7 @@ fn test_constructor() {
     assert_eq!(cfg.l1_recipient, l1_recipient);
     assert_eq!(
         cfg.starkgate_address,
-        load_contract_address(usdc_migration_contract, selector!("starkgate_address")),
+        load_contract_address(usdc_migration_contract, selector!("starkgate_dispatcher")),
     );
     assert_eq!(LEGACY_THRESHOLD, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
     assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
@@ -148,7 +148,7 @@ fn test_upgrade_assertions() {
 #[test]
 fn test_swap_to_new() {
     let cfg = generic_test_fixture();
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(:cfg, id: 0, legacy_supply: amount);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
@@ -196,7 +196,7 @@ fn test_swap_to_new() {
 #[feature("safe_dispatcher")]
 fn test_swap_to_new_assertions() {
     let cfg = deploy_usdc_migration();
-    let amount = INITIAL_SUPPLY / 10;
+    let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(:cfg, id: 0, legacy_supply: 0);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_safe_dispatcher = IUSDCMigrationSafeDispatcher {
@@ -350,4 +350,187 @@ fn test_swap_to_legacy_assertions() {
     cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
     let res = usdc_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+}
+
+#[test]
+fn test_send_to_l1() {
+    let cfg = generic_test_fixture();
+    let amount_1 = LEGACY_THRESHOLD - 1;
+    let amount_2 = 1;
+    let user_1 = new_user(:cfg, id: 1, legacy_supply: amount_1);
+    let user_2 = new_user(:cfg, id: 2, legacy_supply: amount_2);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let new_token_address = cfg.new_token.contract_address();
+    let mut spy = spy_events();
+
+    // Swap without passing the threshold.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract,
+        user: user_1,
+        amount: amount_1,
+        token: cfg.legacy_token,
+    );
+
+    // Assert contract balance (send has not been triggered).
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), amount_1);
+
+    // Assert event is not emitted (only swap event is emitted).
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "send to l1");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: USDCMigrated {
+            user: user_1,
+            from_token: legacy_token_address,
+            to_token: new_token_address,
+            amount: amount_1,
+        },
+        expected_event_selector: @selector!("USDCMigrated"),
+        expected_event_name: "USDCMigrated",
+    );
+
+    // Pass the threshold.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract,
+        user: user_2,
+        amount: amount_2,
+        token: cfg.legacy_token,
+    );
+
+    // Assert contract balance (send has been triggered).
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), 0);
+
+    // Assert event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 3, message: "send to l1");
+    assert_expected_event_emitted(
+        spied_event: events[2],
+        expected_event: SentToL1 {
+            amount: amount_1 + amount_2, batch_size: LEGACY_THRESHOLD, batch_count: 1,
+        },
+        expected_event_selector: @selector!("SentToL1"),
+        expected_event_name: "SentToL1",
+    );
+}
+
+#[test]
+fn test_send_to_l1_multiple_batches() {
+    let cfg = generic_test_fixture();
+    let to_send = LEGACY_THRESHOLD * 10;
+    let left_over = LEGACY_THRESHOLD / 2;
+    let amount = to_send + left_over;
+    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let mut spy = spy_events();
+
+    // Swap for 10 batches.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract, :user, :amount, token: cfg.legacy_token,
+    );
+
+    // Assert contract balance (send has been triggered).
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), left_over);
+
+    // Assert correct event.
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(
+        actual: events.len(), expected: 2, message: "send to l1 multiple batches",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[1],
+        expected_event: SentToL1 { amount: to_send, batch_size: LEGACY_THRESHOLD, batch_count: 10 },
+        expected_event_selector: @selector!("SentToL1"),
+        expected_event_name: "SentToL1",
+    );
+}
+
+#[test]
+fn test_send_to_l1_multiple_sends() {
+    let cfg = generic_test_fixture();
+    let amount_1 = LEGACY_THRESHOLD / 2;
+    let amount_2 = LEGACY_THRESHOLD * 3 / 2;
+    let amount_3 = LEGACY_THRESHOLD * 4 / 3;
+    let amount_4 = LEGACY_THRESHOLD * 10 / 3;
+    let user_1 = new_user(:cfg, id: 1, legacy_supply: amount_1);
+    let user_2 = new_user(:cfg, id: 2, legacy_supply: amount_2);
+    let user_3 = new_user(:cfg, id: 3, legacy_supply: amount_3);
+    let user_4 = new_user(:cfg, id: 4, legacy_supply: amount_4);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let mut spy = spy_events();
+
+    // Swap for user 1.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract,
+        user: user_1,
+        amount: amount_1,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), amount_1);
+
+    // Swap for user 2.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract,
+        user: user_2,
+        amount: amount_2,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+
+    // Swap for user 3.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract,
+        user: user_3,
+        amount: amount_3,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(
+        legacy_dispatcher.balance_of(account: usdc_migration_contract), LEGACY_THRESHOLD / 3,
+    );
+
+    // Swap for user 4.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract,
+        user: user_4,
+        amount: amount_4,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(
+        legacy_dispatcher.balance_of(account: usdc_migration_contract), LEGACY_THRESHOLD * 2 / 3,
+    );
+
+    // Assert events. (migrated, migrated, sent to l1, migrated, sent to l1, migrated, sent to l1)
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(
+        actual: events.len(), expected: 7, message: "send to l1 multiple sends",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[2],
+        expected_event: SentToL1 {
+            amount: LEGACY_THRESHOLD * 2, batch_size: LEGACY_THRESHOLD, batch_count: 2,
+        },
+        expected_event_selector: @selector!("SentToL1"),
+        expected_event_name: "SentToL1",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[4],
+        expected_event: SentToL1 {
+            amount: LEGACY_THRESHOLD, batch_size: LEGACY_THRESHOLD, batch_count: 1,
+        },
+        expected_event_selector: @selector!("SentToL1"),
+        expected_event_name: "SentToL1",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[6],
+        expected_event: SentToL1 {
+            amount: LEGACY_THRESHOLD * 3, batch_size: LEGACY_THRESHOLD, batch_count: 3,
+        },
+        expected_event_selector: @selector!("SentToL1"),
+        expected_event_name: "SentToL1",
+    );
 }

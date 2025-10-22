@@ -4,9 +4,14 @@ pub mod USDCMigration {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::interface::IUpgradeable;
     use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
-    use starknet::storage::StoragePointerWriteAccess;
-    use starknet::{ClassHash, ContractAddress, EthAddress};
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{
+        ClassHash, ContractAddress, EthAddress, get_caller_address, get_contract_address,
+    };
     use starkware_utils::constants::MAX_U256;
+    use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
+    use usdc_migration::errors::USDCMigrationError;
+    use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationConfig};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -37,6 +42,7 @@ pub mod USDCMigration {
     pub enum Event {
         OwnableEvent: OwnableComponent::Event,
         UpgradeableEvent: UpgradeableComponent::Event,
+        USDCMigrated: USDCMigrated,
     }
 
     #[constructor]
@@ -77,6 +83,15 @@ pub mod USDCMigration {
 
     #[abi(embed_v0)]
     pub impl USDCMigrationImpl of IUSDCMigration<ContractState> { //impl logic
+        fn swap_to_new(ref self: ContractState, amount: u256) {
+            self
+                ._swap(
+                    from_token_dispatcher: self.legacy_token_dispatcher.read(),
+                    to_token_dispatcher: self.new_token_dispatcher.read(),
+                    :amount,
+                );
+            // TODO: send to l1 if threshold is reached.
+        }
     }
 
     #[abi(embed_v0)]
@@ -89,6 +104,39 @@ pub mod USDCMigration {
             // TODO: Update transfer unit accordingly.
         // TODO: Emit event?
         // TODO: Send to L1 here according the new threshold?
+        }
+    }
+
+    #[generate_trait]
+    impl USDCMigrationInternalImpl of USDCMigrationInternalTrait {
+        fn _swap(
+            ref self: ContractState,
+            from_token_dispatcher: IERC20Dispatcher,
+            to_token_dispatcher: IERC20Dispatcher,
+            amount: u256,
+        ) {
+            let contract_address = get_contract_address();
+            assert!(
+                amount <= to_token_dispatcher.balance_of(account: contract_address),
+                "{}",
+                USDCMigrationError::INSUFFICIENT_USDC_BALANCE,
+            );
+
+            let caller_address = get_caller_address();
+            from_token_dispatcher
+                .checked_transfer_from(
+                    sender: caller_address, recipient: contract_address, :amount,
+                );
+            to_token_dispatcher.checked_transfer(recipient: caller_address, :amount);
+
+            self
+                .emit(
+                    USDCMigrated {
+                        user: caller_address,
+                        to_token: to_token_dispatcher.contract_address,
+                        amount,
+                    },
+                );
         }
     }
 }

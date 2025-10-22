@@ -1,7 +1,17 @@
+use core::num::traits::Zero;
+use openzeppelin::access::ownable::OwnableComponent::Errors as OwnableErrors;
 use openzeppelin::access::ownable::interface::{IOwnableDispatcher, IOwnableDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use openzeppelin::upgrades::interface::{
+    IUpgradeableDispatcher, IUpgradeableDispatcherTrait, IUpgradeableSafeDispatcher,
+    IUpgradeableSafeDispatcherTrait,
+};
+use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as UpgradeableErrors;
+use snforge_std::DeclareResultTrait;
 use starkware_utils::constants::MAX_U256;
+use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address};
+
 #[test]
 fn test_constructor() {
     let cfg = deploy_usdc_migration();
@@ -37,4 +47,37 @@ fn test_constructor() {
     assert_eq!(
         new_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
     );
+}
+
+#[test]
+fn test_upgrade() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let owner = cfg.owner;
+    let upgradeable_dispatcher = IUpgradeableDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: owner);
+    let new_class_hash = *snforge_std::declare("MockContract").unwrap().contract_class().class_hash;
+    upgradeable_dispatcher.upgrade(new_class_hash);
+    assert_eq!(snforge_std::get_class_hash(usdc_migration_contract), new_class_hash);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_upgrade_assertions() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let owner = cfg.owner;
+    let upgradeable_safe_dispatcher = IUpgradeableSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let new_class_hash = 'new_class_hash'.try_into().unwrap();
+    // Catch only owner.
+    let result = upgradeable_safe_dispatcher.upgrade(new_class_hash);
+    assert_panic_with_felt_error(result, OwnableErrors::NOT_OWNER);
+    // Catch zero class hash.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: owner);
+    let result = upgradeable_safe_dispatcher.upgrade(Zero::zero());
+    assert_panic_with_felt_error(result, UpgradeableErrors::INVALID_CLASS);
 }

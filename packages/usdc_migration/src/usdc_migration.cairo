@@ -1,10 +1,10 @@
 #[starknet::contract]
 pub mod USDCMigration {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use starknet::storage::StoragePointerWriteAccess;
-    use starknet::{ContractAddress, EthAddress};
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, EthAddress, get_contract_address};
     use starkware_utils::constants::MAX_U256;
-    use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationConfig};
+    use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationOwner};
 
     #[storage]
     struct Storage {
@@ -57,7 +57,7 @@ pub mod USDCMigration {
     }
 
     #[abi(embed_v0)]
-    pub impl USDCMigrationConfigImpl of IUSDCMigrationConfig<ContractState> { //impl logic
+    pub impl USDCMigrationOwnerImpl of IUSDCMigrationOwner<ContractState> { //impl logic
         fn set_legacy_threshold(ref self: ContractState, legacy_threshold: u256) {
             // TODO: Assert caller is owner.
             // TODO: Assert the given threshold is valid according to the fixed transfer units.
@@ -66,6 +66,24 @@ pub mod USDCMigration {
             // TODO: Update transfer unit accordingly.
         // TODO: Emit event?
         // TODO: Send to L1 here according the new threshold?
+        }
+
+        // TODO: Test once send_legacy_to_l1 is implemented.
+        fn send_legacy_reminder_to_l1(self: @ContractState) -> u256 {
+            // TODO: Assert caller is owner.
+            let legacy_dispacther = IERC20Dispatcher { contract_address: self.legacy_token.read() };
+            let legacy_balance = legacy_dispacther.balance_of(account: get_contract_address());
+            self.send_legacy_to_l1(amount: legacy_balance);
+            return legacy_balance;
+        }
+    }
+
+    #[generate_trait]
+    impl InternalFunctions of InternalUSDCMigrationTrait {
+        fn send_legacy_to_l1(self: @ContractState, amount: u256) {
+            // TODO: implement this.
+            // TODO: Event.
+            return;
         }
     }
 }

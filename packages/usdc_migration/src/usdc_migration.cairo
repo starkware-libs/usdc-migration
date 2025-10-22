@@ -2,8 +2,9 @@
 pub mod USDCMigration {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use starknet::{ContractAddress, EthAddress, get_contract_address};
+    use starknet::{ContractAddress, EthAddress, get_caller_address, get_contract_address};
     use starkware_utils::constants::MAX_U256;
+    use usdc_migration::errors::Error;
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationOwner};
 
     #[storage]
@@ -73,6 +74,13 @@ pub mod USDCMigration {
             let legacy_balance = legacy_dispacther.balance_of(account: get_contract_address());
             self._send_legacy_to_l1(amount: legacy_balance);
             return legacy_balance;
+        }
+
+        fn verify_owner(self: @ContractState) {
+            assert!(
+                get_caller_address() == self.owner_l2_address.read(), "{}", Error::VERIFY_FAILED,
+            );
+            // TODO: Emit event?
         }
     }
 

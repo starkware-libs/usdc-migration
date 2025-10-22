@@ -1,6 +1,12 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starkware_utils::constants::MAX_U256;
-use usdc_migration::interface::{IUSDCMigrationOwnerDispatcher, IUSDCMigrationOwnerDispatcherTrait};
+use starkware_utils::errors::Describable;
+use starkware_utils_testing::test_utils::{assert_panic_with_error, cheat_caller_address_once};
+use usdc_migration::errors::Error;
+use usdc_migration::interface::{
+    IUSDCMigrationOwnerDispatcher, IUSDCMigrationOwnerDispatcherTrait,
+    IUSDCMigrationOwnerSafeDispatcher, IUSDCMigrationOwnerSafeDispatcherTrait,
+};
 use usdc_migration::tests::test_utils::constants::LEGACY_THRESHOLD;
 use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address, load_u256};
 
@@ -56,4 +62,22 @@ fn test_set_legacy_threshold() {
     let new_threshold = LEGACY_THRESHOLD * 2;
     usdc_migration_owner_dispatcher.set_legacy_threshold(threshold: new_threshold);
     assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_verify_owner_l2_address() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_owner_safe_dispatcher = IUSDCMigrationOwnerSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let result = usdc_migration_owner_safe_dispatcher.verify_owner();
+    assert_panic_with_error(:result, expected_error: Error::VERIFY_FAILED.describe());
+
+    cheat_caller_address_once(
+        contract_address: usdc_migration_contract, caller_address: cfg.owner_l2_address,
+    );
+    let result = usdc_migration_owner_safe_dispatcher.verify_owner();
+    assert!(result.is_ok());
 }

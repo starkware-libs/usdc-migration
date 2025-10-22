@@ -1,6 +1,11 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starkware_utils::constants::MAX_U256;
-use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address};
+use usdc_migration::interface::{
+    IUSDCMigrationConfigDispatcher, IUSDCMigrationConfigDispatcherTrait,
+};
+use usdc_migration::tests::test_utils::constants::LEGACY_THRESHOLD;
+use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address, load_u256};
+
 #[test]
 fn test_constructor() {
     let cfg = deploy_usdc_migration();
@@ -28,6 +33,7 @@ fn test_constructor() {
         cfg.starkgate_address,
         load_contract_address(usdc_migration_contract, selector!("starkgate_address")),
     );
+    assert_eq!(LEGACY_THRESHOLD, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
     // Assert infinite approval to owner_l2_address for both USDC.e and USDC.
     let legacy_dispatcher = IERC20Dispatcher { contract_address: cfg.legacy_token };
     let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token };
@@ -39,4 +45,17 @@ fn test_constructor() {
         new_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner_l2_address),
         MAX_U256,
     );
+}
+
+#[test]
+fn test_set_legacy_threshold() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_cfg_dispatcher = IUSDCMigrationConfigDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    // Set the threshold to a new value.
+    let new_threshold = LEGACY_THRESHOLD * 2;
+    usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
 }

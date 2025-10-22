@@ -1,7 +1,8 @@
 use constants::{INITIAL_SUPPLY, L1_RECIPIENT, OWNER_ADDRESS, STARKGATE_ADDRESS};
+use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::{ContractAddress, EthAddress};
-use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
+use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
 
 #[derive(Debug, Drop, Copy)]
 pub(crate) struct USDCMigrationCfg {
@@ -11,6 +12,7 @@ pub(crate) struct USDCMigrationCfg {
     pub l1_recipient: EthAddress,
     pub owner_l2_address: ContractAddress,
     pub starkgate_address: ContractAddress,
+    pub initial_contract_supply: u256,
 }
 
 pub(crate) mod constants {
@@ -26,6 +28,12 @@ pub(crate) mod constants {
     pub fn STARKGATE_ADDRESS() -> ContractAddress {
         'STARKGATE_ADDRESS'.try_into().unwrap()
     }
+}
+
+pub(crate) fn generic_test_fixture() -> USDCMigrationCfg {
+    let cfg = deploy_usdc_migration();
+    supply_migration_contract_with_new_token(:cfg, amount: cfg.initial_contract_supply);
+    cfg
 }
 
 pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
@@ -63,7 +71,30 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
         l1_recipient: L1_RECIPIENT(),
         owner_l2_address: OWNER_ADDRESS(),
         starkgate_address: STARKGATE_ADDRESS(),
+        initial_contract_supply: INITIAL_SUPPLY / 2,
     }
+}
+
+pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, amount: u256) -> ContractAddress {
+    let user_address = generate_user_address(:id);
+    let legacy_token_dispatcher = IERC20Dispatcher { contract_address: cfg.legacy_token };
+    cheat_caller_address_once(
+        contract_address: cfg.legacy_token, caller_address: cfg.owner_l2_address,
+    );
+    legacy_token_dispatcher.transfer(recipient: user_address, :amount);
+    user_address
+}
+
+fn generate_user_address(id: u8) -> ContractAddress {
+    ('USER_ADDRESS' + id.into()).try_into().unwrap()
+}
+
+pub(crate) fn supply_migration_contract_with_new_token(cfg: USDCMigrationCfg, amount: u256) {
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token };
+    cheat_caller_address_once(
+        contract_address: cfg.new_token, caller_address: cfg.owner_l2_address,
+    );
+    new_dispatcher.transfer(recipient: cfg.usdc_migration_contract, :amount);
 }
 
 // TODO: Move to starkware_utils_testing.

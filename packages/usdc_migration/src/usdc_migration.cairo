@@ -1,7 +1,7 @@
 #[starknet::contract]
-pub mod smart_contract_1 {
+pub mod usdc_migration {
     //use statements
-    use smart_contract_1::interface::ISmartContract1;
+    use usdc_migration::interface::IUSDCMigration;
 
     #[storage]
     struct Storage { //storage variables
@@ -17,6 +17,6 @@ pub mod smart_contract_1 {
     }
 
     #[abi(embed_v0)]
-    pub impl SmartContract1Impl of ISmartContract1<ContractState> { //impl logic
+    pub impl USDCMigrationImpl of IUSDCMigration<ContractState> { //impl logic
     }
 }

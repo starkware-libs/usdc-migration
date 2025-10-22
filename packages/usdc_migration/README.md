@@ -1,2 +1,2 @@
-# Smart Contract 1
+# USDC Migration
 Document overview of this package here.

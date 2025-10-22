@@ -101,6 +101,11 @@ pub mod USDCMigration {
             }
             return legacy_balance;
         }
+
+        fn verify_owner(self: @ContractState) {
+            self.ownable.assert_only_owner();
+            // TODO: Emit event?
+        }
     }
 
     #[generate_trait]

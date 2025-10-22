@@ -12,4 +12,7 @@ pub trait IUSDCMigrationAdmin<T> {
     /// Returns the amount of legacy tokens sent.
     /// Caller must be the owner.
     fn send_legacy_to_l1(self: @T) -> u256;
+    /// Verify the owner L2 address given in the constructor is a reachable address.
+    /// Caller must be the owner.
+    fn verify_owner(self: @T);
 }

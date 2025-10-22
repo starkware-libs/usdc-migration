@@ -127,3 +127,19 @@ fn test_send_legacy_to_l1_assertions() {
     let result = usdc_migration_admin_safe_dispatcher.send_legacy_to_l1();
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 }
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_verify_owner_l2_address() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_admin_safe_dispatcher = IUSDCMigrationAdminSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let result = usdc_migration_admin_safe_dispatcher.verify_owner();
+    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    let result = usdc_migration_admin_safe_dispatcher.verify_owner();
+    assert!(result.is_ok());
+}

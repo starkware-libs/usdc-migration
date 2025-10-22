@@ -15,4 +15,8 @@ pub trait IUSDCMigrationAdmin<T> {
     /// Returns the amount of legacy tokens sent.
     /// Caller must be the owner.
     fn send_legacy_balance_to_l1(self: @T);
+    /// Verifies the owner L2 address provided in the constructor is a reachable address and grants
+    /// the owner infinite approval for both legacy and new tokens.
+    /// Caller must be the owner.
+    fn verify_owner(self: @T);
 }

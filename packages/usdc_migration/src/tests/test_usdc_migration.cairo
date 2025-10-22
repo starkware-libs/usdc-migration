@@ -59,15 +59,6 @@ fn test_constructor() {
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: usdc_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
-    // Assert infinite approval to owner for both legacy and new tokens.
-    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
-    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
-    assert_eq!(
-        legacy_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
-    );
-    assert_eq!(
-        new_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
-    );
 }
 
 #[test]
@@ -224,4 +215,31 @@ fn test_send_legacy_balance_to_l1_assertions() {
     };
     let result = usdc_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_verify_owner_l2_address() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_admin_safe_dispatcher = IUSDCMigrationAdminSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let result = usdc_migration_admin_safe_dispatcher.verify_owner();
+    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    let result = usdc_migration_admin_safe_dispatcher.verify_owner();
+    assert!(result.is_ok());
+    // Assert infinite approval to owner for both legacy and new tokens.
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    assert_eq!(
+        legacy_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
+    );
+    assert_eq!(
+        new_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
+    );
 }

@@ -1,5 +1,11 @@
-use constants::{INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS, STARKGATE_ADDRESS};
-use snforge_std::{ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait};
+use constants::{
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS,
+    STARKGATE_ADDRESS,
+};
+use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use snforge_std::{
+    ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait, set_balance,
+};
 use starknet::{ContractAddress, EthAddress};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
 
@@ -23,6 +29,7 @@ pub(crate) mod constants {
         * 10_u256.pow(6); // 140 * million * decimals
     // TODO: Change to the real value.
     pub const LEGACY_THRESHOLD: u256 = 100_000;
+    pub const INITIAL_CONTRACT_SUPPLY: u256 = INITIAL_SUPPLY / 20;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }
@@ -32,6 +39,14 @@ pub(crate) mod constants {
     pub fn STARKGATE_ADDRESS() -> ContractAddress {
         'STARKGATE_ADDRESS'.try_into().unwrap()
     }
+}
+
+pub(crate) fn generic_test_fixture() -> USDCMigrationCfg {
+    let cfg = deploy_usdc_migration();
+    supply_contract(
+        target: cfg.usdc_migration_contract, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
+    );
+    cfg
 }
 
 fn deploy_tokens() -> (Token, Token) {
@@ -84,6 +99,22 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
         owner: OWNER_ADDRESS(),
         starkgate_address: STARKGATE_ADDRESS(),
     }
+}
+
+pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, legacy_supply: u256) -> ContractAddress {
+    let user_address = _generate_user_address(:id);
+    set_balance(target: user_address, new_balance: legacy_supply, token: cfg.legacy_token);
+    user_address
+}
+
+fn _generate_user_address(id: u8) -> ContractAddress {
+    ('USER_ADDRESS' + id.into()).try_into().unwrap()
+}
+
+pub(crate) fn supply_contract(target: ContractAddress, token: Token, amount: u256) {
+    let current_balance = IERC20Dispatcher { contract_address: token.contract_address() }
+        .balance_of(account: target);
+    set_balance(:target, new_balance: current_balance + amount, :token);
 }
 
 // TODO: Move to starkware_utils_testing.

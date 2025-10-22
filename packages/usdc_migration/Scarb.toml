@@ -33,8 +33,3 @@ test = "SNFORGE_BACKTRACE=1 snforge test"
 sierra = true
 casm = true
 casm-add-pythonic-hints = true
-
-[profile.dev.cairo]
-unstable-add-statements-functions-debug-info = true
-unstable-add-statements-code-locations-debug-info = true
-inlining-strategy = "avoid"

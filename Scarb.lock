@@ -146,7 +146,7 @@ dependencies = [
 [[package]]
 name = "starkware_utils"
 version = "1.0.0"
-source = "git+https://github.com/starkware-libs/starkware-starknet-utils?rev=123332b0895ce9116fb2eaa2469739250c3f733d#123332b0895ce9116fb2eaa2469739250c3f733d"
+source = "git+https://github.com/starkware-libs/starkware-starknet-utils?rev=89b8b22fbf2d81ab22b8c4e5e98569d5ff719045#89b8b22fbf2d81ab22b8c4e5e98569d5ff719045"
 dependencies = [
  "openzeppelin",
 ]
@@ -154,7 +154,7 @@ dependencies = [
 [[package]]
 name = "starkware_utils_testing"
 version = "1.0.0"
-source = "git+https://github.com/starkware-libs/starkware-starknet-utils?rev=123332b0895ce9116fb2eaa2469739250c3f733d#123332b0895ce9116fb2eaa2469739250c3f733d"
+source = "git+https://github.com/starkware-libs/starkware-starknet-utils?rev=89b8b22fbf2d81ab22b8c4e5e98569d5ff719045#89b8b22fbf2d81ab22b8c4e5e98569d5ff719045"
 dependencies = [
  "openzeppelin",
  "snforge_std",

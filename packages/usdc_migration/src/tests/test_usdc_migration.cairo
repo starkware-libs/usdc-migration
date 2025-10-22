@@ -53,7 +53,7 @@ fn test_constructor() {
     assert_eq!(cfg.l1_recipient, l1_recipient);
     assert_eq!(
         cfg.starkgate_address,
-        load_contract_address(usdc_migration_contract, selector!("starkgate_address")),
+        load_contract_address(usdc_migration_contract, selector!("starkgate_dispatcher")),
     );
     assert_eq!(LEGACY_THRESHOLD, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
     // Assert owner is set correctly.
@@ -133,7 +133,7 @@ fn test_upgrade_assertions() {
 #[test]
 fn test_swap_to_new() {
     let cfg = generic_test_fixture();
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(:cfg, id: 0, legacy_supply: amount);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
@@ -181,7 +181,7 @@ fn test_swap_to_new() {
 #[feature("safe_dispatcher")]
 fn test_swap_to_new_assertions() {
     let cfg = deploy_usdc_migration();
-    let amount = INITIAL_SUPPLY / 10;
+    let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(:cfg, id: 0, legacy_supply: 0);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_safe_dispatcher = IUSDCMigrationSafeDispatcher {
@@ -212,3 +212,6 @@ fn test_swap_to_new_assertions() {
     let res = usdc_migration_safe_dispatcher.swap_to_new(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
 }
+
+#[test]
+fn test_send_to_l1() {}

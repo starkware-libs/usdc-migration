@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod usdc_migration {
+pub mod USDCMigration {
     //use statements
     use usdc_migration::interface::IUSDCMigration;
 

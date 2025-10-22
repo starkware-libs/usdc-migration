@@ -73,7 +73,7 @@ fn test_verify_owner_l2_address() {
         contract_address: usdc_migration_contract,
     };
     let result = usdc_migration_owner_safe_dispatcher.verify_owner();
-    assert_panic_with_error(:result, expected_error: Error::VERIFY_FAILED.describe());
+    assert_panic_with_error(:result, expected_error: Error::VERIFY_L2_FAILED.describe());
 
     cheat_caller_address_once(
         contract_address: usdc_migration_contract, caller_address: cfg.owner_l2_address,

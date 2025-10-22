@@ -78,10 +78,17 @@ pub mod USDCMigration {
 
         fn verify_owner(self: @ContractState) {
             assert!(
-                get_caller_address() == self.owner_l2_address.read(), "{}", Error::VERIFY_FAILED,
+                get_caller_address() == self.owner_l2_address.read(), "{}", Error::VERIFY_L2_FAILED,
             );
             // TODO: Emit event?
         }
+    }
+
+    /// Verify the L1 recipient address is a reachable address.
+    #[l1_handler]
+    fn verify_l1_recipient(self: @ContractState, from_address: felt252) {
+        assert!(from_address == self.l1_recipient.read().into(), "{}", Error::VERIFY_L1_FAILED);
+        // TODO: Emit event?
     }
 
     #[generate_trait]

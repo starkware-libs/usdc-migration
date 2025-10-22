@@ -7,16 +7,28 @@ use openzeppelin::upgrades::interface::{
     IUpgradeableSafeDispatcherTrait,
 };
 use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as UpgradeableErrors;
-use snforge_std::{DeclareResultTrait, TokenTrait};
+use snforge_std::{DeclareResultTrait, EventSpyTrait, EventsFilterTrait, TokenTrait, spy_events};
 use starkware_utils::constants::MAX_U256;
-use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
+use starkware_utils::erc20::erc20_errors::Erc20Error;
+use starkware_utils::errors::Describable;
+use starkware_utils_testing::event_test_utils::assert_number_of_events;
+use starkware_utils_testing::test_utils::{
+    assert_expected_event_emitted, assert_panic_with_error, assert_panic_with_felt_error,
+    cheat_caller_address_once,
+};
+use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
 use usdc_migration::interface::{
     IUSDCMigrationConfigDispatcher, IUSDCMigrationConfigDispatcherTrait,
     IUSDCMigrationConfigSafeDispatcher, IUSDCMigrationConfigSafeDispatcherTrait,
+    IUSDCMigrationDispatcher, IUSDCMigrationDispatcherTrait, IUSDCMigrationSafeDispatcher,
+    IUSDCMigrationSafeDispatcherTrait,
 };
-use usdc_migration::tests::test_utils::constants::LEGACY_THRESHOLD;
-use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address, load_u256};
-
+use usdc_migration::tests::test_utils::constants::{
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, LEGACY_THRESHOLD,
+};
+use usdc_migration::tests::test_utils::{
+    deploy_usdc_migration, generic_test_fixture, load_contract_address, load_u256, new_user,
+};
 #[test]
 fn test_constructor() {
     let cfg = deploy_usdc_migration();
@@ -115,4 +127,79 @@ fn test_upgrade_assertions() {
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: owner);
     let result = upgradeable_safe_dispatcher.upgrade(Zero::zero());
     assert_panic_with_felt_error(result, UpgradeableErrors::INVALID_CLASS);
+}
+
+#[test]
+fn test_swap_to_new() {
+    let cfg = generic_test_fixture();
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let new_token_address = cfg.new_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
+
+    // Spy events.
+    let mut spy = spy_events();
+
+    // Approve and migrate.
+    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
+    legacy_dispatcher.approve(spender: usdc_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    usdc_migration_dispatcher.swap_to_new(:amount);
+
+    // Assert user balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: user), 0);
+    assert_eq!(new_dispatcher.balance_of(account: user), amount);
+
+    // Assert contract balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), amount);
+    assert_eq!(
+        new_dispatcher.balance_of(account: usdc_migration_contract),
+        INITIAL_CONTRACT_SUPPLY - amount,
+    );
+
+    // Assert event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "migrate");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: USDCMigrated {
+            user, from_token: legacy_token_address, to_token: new_token_address, amount,
+        },
+        expected_event_selector: @selector!("USDCMigrated"),
+        expected_event_name: "USDCMigrated",
+    );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_swap_to_new_assertions() {
+    let cfg = deploy_usdc_migration();
+    let amount = INITIAL_SUPPLY / 10;
+    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_safe_dispatcher = IUSDCMigrationSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Insufficient allowance.
+    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
+    legacy_dispatcher.approve(spender: usdc_migration_contract, amount: amount / 2);
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_new(:amount);
+    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_ALLOWANCE.describe());
+
+    // Insufficient balance.
+    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
+    legacy_dispatcher.approve(spender: usdc_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_new(:amount);
+    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
 }

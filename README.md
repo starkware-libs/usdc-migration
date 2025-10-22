@@ -51,9 +51,7 @@ Make sure to edit Scarb.toml to define workspace in this repo.
 
 | Smart contract   | Description                                                                                                                            |
 |------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| [Smart Contract 1](packages/smart_contract_1)             | Smart contract 1 description                                                                                                 |
-| [Smart Contract 2](packages/smart_Contract_2)          | Smart contract 2 description                                                        |
-| [ETC...](packages/etc)       | Etc...                                                                  |
+| [USDC Migration](packages/usdc_migration)             | USDC Migration description                                                                                                 |
 
 ## Dependencies
 

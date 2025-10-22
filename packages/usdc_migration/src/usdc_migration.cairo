@@ -62,9 +62,6 @@ pub mod USDCMigration {
         self.starkgate_address.write(starkgate_address);
         self.legacy_threshold.write(legacy_threshold);
         self.ownable.initializer(:owner);
-        // Infinite approval to l2 address for both legacy and new tokens.
-        legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
-        new_dispatcher.approve(spender: owner, amount: MAX_U256);
     }
 
     #[abi(embed_v0)]
@@ -113,6 +110,16 @@ pub mod USDCMigration {
             if legacy_balance > 0 {
                 self._send_legacy_to_l1(amount: legacy_balance);
             }
+        }
+
+        fn verify_owner(self: @ContractState) {
+            self.ownable.assert_only_owner();
+            let owner = get_caller_address();
+            let legacy_dispatcher = self.legacy_token_dispatcher.read();
+            let new_dispatcher = self.new_token_dispatcher.read();
+            // Infinite approval to l2 address for both legacy and new tokens.
+            legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
+            new_dispatcher.approve(spender: owner, amount: MAX_U256);
         }
     }
 

@@ -1,7 +1,7 @@
 pub mod errors;
 pub mod events;
 pub mod interface;
-pub mod smart_contract_1;
+pub mod usdc_migration;
 
 #[cfg(test)]
 pub mod tests;

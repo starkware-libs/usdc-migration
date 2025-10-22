@@ -4,10 +4,10 @@ pub mod USDCMigration {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::interface::IUpgradeable;
     use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
-    use starknet::storage::StoragePointerWriteAccess;
-    use starknet::{ClassHash, ContractAddress, EthAddress};
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ClassHash, ContractAddress, EthAddress, get_contract_address};
     use starkware_utils::constants::MAX_U256;
-    use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationConfig};
+    use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -80,7 +80,7 @@ pub mod USDCMigration {
     }
 
     #[abi(embed_v0)]
-    pub impl USDCMigrationConfigImpl of IUSDCMigrationConfig<ContractState> { //impl logic
+    pub impl AdminFunctions of IUSDCMigrationAdmin<ContractState> { //impl logic
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
             // TODO: Assert the given threshold is valid according to the fixed transfer units.
@@ -89,6 +89,26 @@ pub mod USDCMigration {
             // TODO: Update transfer unit accordingly.
         // TODO: Emit event?
         // TODO: Send to L1 here according the new threshold?
+        }
+
+        // TODO: Test once _send_legacy_to_l1 is implemented.
+        fn send_legacy_to_l1(self: @ContractState) -> u256 {
+            self.ownable.assert_only_owner();
+            let legacy_token = self.legacy_token_dispatcher.read();
+            let legacy_balance = legacy_token.balance_of(account: get_contract_address());
+            if legacy_balance > 0 {
+                self._send_legacy_to_l1(amount: legacy_balance);
+            }
+            return legacy_balance;
+        }
+    }
+
+    #[generate_trait]
+    impl InternalFunctions of InternalTrait {
+        fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
+            // TODO: implement this.
+            // TODO: Event.
+            return;
         }
     }
 }

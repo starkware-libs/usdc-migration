@@ -84,3 +84,10 @@ pub(crate) fn load_u256(target: ContractAddress, storage_address: felt252) -> u2
     let high = (*value[1]).try_into().unwrap();
     u256 { low, high }
 }
+
+/// Mock contract to declare a mock class hash for testing upgrade.
+#[starknet::contract]
+pub mod MockContract {
+    #[storage]
+    struct Storage {}
+}

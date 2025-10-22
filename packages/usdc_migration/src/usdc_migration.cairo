@@ -11,13 +11,15 @@ pub mod USDCMigration {
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
     use usdc_migration::errors::Errors;
-    use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
+    use usdc_migration::events::USDCMigrationEvents::{SentToL1, USDCMigrated};
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
+    use usdc_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
     /// Fixed set of batch sizes used when bridging the legacy token to L1.
     pub(crate) const FIXED_BATCH_SIZES: [u256; 2] = [SMALL_BATCH_SIZE, LARGE_BATCH_SIZE];
+    pub(crate) const MAX_BATCH_COUNT: u256 = 100;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -36,13 +38,17 @@ pub mod USDCMigration {
         new_token_dispatcher: IERC20Dispatcher,
         /// Ethereum address to which the legacy token is bridged.
         l1_recipient: EthAddress,
-        /// Token bridge address.
-        starkgate_address: ContractAddress,
+        /// Address in L2 that gets the remaining USDC.
+        owner_l2_address: ContractAddress,
+        /// Token bridge dispatcher.
+        starkgate_dispatcher: ITokenBridgeDispatcher,
         /// The threshold amount of legacy token balance, that triggers sending to L1.
         legacy_threshold: u256,
         /// The exact amount of legacy token sent to L1 in a single withdraw action.
         /// Must be a value from FIXED_BATCH_SIZES.
         batch_size: u256,
+        /// L1 USDC token address.
+        l1_token_address: EthAddress,
     }
 
     #[event]
@@ -51,6 +57,7 @@ pub mod USDCMigration {
         OwnableEvent: OwnableComponent::Event,
         UpgradeableEvent: UpgradeableComponent::Event,
         USDCMigrated: USDCMigrated,
+        SentToL1: SentToL1,
     }
 
     #[constructor]
@@ -62,17 +69,20 @@ pub mod USDCMigration {
         owner: ContractAddress,
         starkgate_address: ContractAddress,
         legacy_threshold: u256,
+        l1_token_address: EthAddress,
     ) {
         let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token };
         let new_dispatcher = IERC20Dispatcher { contract_address: new_token };
+        let starkgate_dispatcher = ITokenBridgeDispatcher { contract_address: starkgate_address };
         self.legacy_token_dispatcher.write(legacy_dispatcher);
         self.new_token_dispatcher.write(new_dispatcher);
         self.l1_recipient.write(l1_recipient);
-        self.starkgate_address.write(starkgate_address);
+        self.starkgate_dispatcher.write(starkgate_dispatcher);
         assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
         self.legacy_threshold.write(legacy_threshold);
         self.batch_size.write(LARGE_BATCH_SIZE);
         self.ownable.initializer(:owner);
+        self.l1_token_address.write(l1_token_address);
     }
 
     #[abi(embed_v0)]
@@ -91,22 +101,31 @@ pub mod USDCMigration {
     #[abi(embed_v0)]
     pub impl USDCMigrationImpl of IUSDCMigration<ContractState> { //impl logic
         fn swap_to_new(ref self: ContractState, amount: u256) {
+            let contract_address = get_contract_address();
             self
                 ._swap(
+                    :contract_address,
                     from_token: self.legacy_token_dispatcher.read(),
                     to_token: self.new_token_dispatcher.read(),
                     :amount,
                 );
-            // TODO: send to l1 if threshold is reached.
+            self._send_to_l1(:contract_address);
         }
 
         fn swap_to_legacy(ref self: ContractState, amount: u256) {
+            let contract_address = get_contract_address();
             self
                 ._swap(
+                    contract_address: contract_address,
                     from_token: self.new_token_dispatcher.read(),
                     to_token: self.legacy_token_dispatcher.read(),
                     :amount,
                 );
+        }
+
+        fn send_to_l1(ref self: ContractState) {
+            let contract_address = get_contract_address();
+            self._send_to_l1(:contract_address);
         }
     }
 
@@ -153,14 +172,14 @@ pub mod USDCMigration {
     }
 
     #[generate_trait]
-    impl USDCMigrationInternalImpl of USDCMigrationInternalTrait {
+    impl InternalUSDCMigration of InternalUSDCMigrationTrait {
         fn _swap(
             ref self: ContractState,
+            contract_address: ContractAddress,
             from_token: IERC20Dispatcher,
             to_token: IERC20Dispatcher,
             amount: u256,
         ) {
-            let contract_address = get_contract_address();
             let user = get_caller_address();
             from_token.checked_transfer_from(sender: user, recipient: contract_address, :amount);
             to_token.checked_transfer(recipient: user, :amount);
@@ -177,9 +196,35 @@ pub mod USDCMigration {
         }
 
         fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
-            // TODO: implement this.
-            // TODO: Event.
-            return;
+            self.send_units_to_l1(batch_size: amount, batch_count: 1);
+        }
+
+        fn _send_to_l1(ref self: ContractState, contract_address: ContractAddress) {
+            let legacy_balance = self
+                .legacy_token_dispatcher
+                .read()
+                .balance_of(account: contract_address);
+            if legacy_balance < self.legacy_threshold.read() {
+                return;
+            }
+
+            let batch_size = self.batch_size.read();
+            let batch_count = legacy_balance / batch_size;
+            self.send_units_to_l1(:batch_size, :batch_count);
+
+            self.emit(SentToL1 { amount: batch_size * batch_count, batch_size, batch_count });
+        }
+
+        fn send_units_to_l1(self: @ContractState, batch_size: u256, batch_count: u256) {
+            assert(batch_count <= MAX_BATCH_COUNT, Errors::BATCH_COUNT_TOO_LARGE);
+            let starkgate_dispatcher = self.starkgate_dispatcher.read();
+            let l1_recipient = self.l1_recipient.read();
+            let l1_token = self.l1_token_address.read();
+
+            for _ in 0..batch_count {
+                starkgate_dispatcher
+                    .initiate_token_withdraw(:l1_token, :l1_recipient, amount: batch_size);
+            }
         }
     }
 }

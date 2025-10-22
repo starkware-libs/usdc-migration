@@ -6,6 +6,8 @@ pub trait IUSDCMigration<T> {
     /// Exchanges (1:1) `amount` of new token for legacy token.
     /// Precondition: Sufficient allowance of new token.
     fn swap_to_legacy(ref self: T, amount: u256);
+    /// Sends legacy tokens to L1 in batches of `l1_transfer_unit`.
+    fn send_to_l1(ref self: T);
 }
 
 #[starknet::interface]

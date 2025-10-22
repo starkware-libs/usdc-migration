@@ -43,6 +43,8 @@ pub mod USDCMigration {
         /// The exact amount of legacy token sent to L1 in a single withdraw action.
         /// Must be a value from FIXED_BATCH_SIZES.
         batch_size: u256,
+        /// Indicates if L1 recipient address was verified.
+        l1_recipient_verified: bool,
     }
 
     #[event]
@@ -143,6 +145,16 @@ pub mod USDCMigration {
         }
     }
 
+    /// Verify the L1 recipient address is a reachable address.
+    // TODO: Test.
+    #[l1_handler]
+    fn verify_l1_recipient(ref self: ContractState, from_address: felt252) {
+        // TODO: Not panic here?
+        assert(from_address == self.l1_recipient.read().into(), Errors::VERIFY_L1_FAILED);
+        self.l1_recipient_verified.write(true);
+        // TODO: Emit event?
+    }
+
     #[generate_trait]
     impl USDCMigrationInternalImpl of USDCMigrationInternalTrait {
         fn _swap(
@@ -167,7 +179,9 @@ pub mod USDCMigration {
                 );
         }
 
+        // TODO: Catch error in tests in every function that calls this.
         fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
+            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             // TODO: implement this.
             // TODO: Event.
             return;

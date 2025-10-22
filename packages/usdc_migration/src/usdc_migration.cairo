@@ -11,7 +11,7 @@ pub mod USDCMigration {
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
     use usdc_migration::errors::Errors;
-    use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
+    use usdc_migration::events::USDCMigrationEvents::{L1RecipientVerified, USDCMigrated};
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
@@ -43,6 +43,8 @@ pub mod USDCMigration {
         /// The exact amount of legacy token sent to L1 in a single withdraw action.
         /// Must be a value from FIXED_BATCH_SIZES.
         batch_size: u256,
+        /// Indicates if L1 recipient address was verified.
+        l1_recipient_verified: bool,
     }
 
     #[event]
@@ -51,6 +53,7 @@ pub mod USDCMigration {
         OwnableEvent: OwnableComponent::Event,
         UpgradeableEvent: UpgradeableComponent::Event,
         USDCMigrated: USDCMigrated,
+        L1RecipientVerified: L1RecipientVerified,
     }
 
     #[constructor]
@@ -143,6 +146,18 @@ pub mod USDCMigration {
         }
     }
 
+    /// Verify the L1 recipient address is a reachable address.
+    // TODO: Test.
+    #[l1_handler]
+    fn verify_l1_recipient(ref self: ContractState, from_address: felt252) {
+        // TODO: If not verified here?
+        let l1_recipient = self.l1_recipient.read();
+        if from_address == l1_recipient.into() {
+            self.l1_recipient_verified.write(true);
+            self.emit(L1RecipientVerified { l1_recipient });
+        }
+    }
+
     #[generate_trait]
     impl USDCMigrationInternalImpl of USDCMigrationInternalTrait {
         fn _swap(
@@ -167,7 +182,9 @@ pub mod USDCMigration {
                 );
         }
 
+        // TODO: Catch error in tests in every function that calls this.
         fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
+            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             // TODO: implement this.
             // TODO: Event.
             return;

@@ -1,5 +1,5 @@
 pub mod USDCMigrationEvents {
-    use starknet::ContractAddress;
+    use starknet::{ContractAddress, EthAddress};
 
     #[derive(Drop, starknet::Event, Debug, PartialEq)]
     pub struct USDCMigrated {
@@ -10,5 +10,11 @@ pub mod USDCMigrationEvents {
         #[key]
         pub to_token: ContractAddress,
         pub amount: u256,
+    }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct L1RecipientVerified {
+        #[key]
+        pub l1_recipient: EthAddress,
     }
 }

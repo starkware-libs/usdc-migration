@@ -1,7 +1,8 @@
 use constants::{INITIAL_SUPPLY, L1_RECIPIENT, OWNER_ADDRESS, STARKGATE_ADDRESS};
+use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::{ContractAddress, EthAddress};
-use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
+use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
 
 #[derive(Debug, Drop, Copy)]
 pub(crate) struct USDCMigrationCfg {
@@ -64,6 +65,28 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
         owner_l2_address: OWNER_ADDRESS(),
         starkgate_address: STARKGATE_ADDRESS(),
     }
+}
+
+pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, amount: u256) -> ContractAddress {
+    let user_address = generate_user_address(:id);
+    let legacy_token_dispatcher = IERC20Dispatcher { contract_address: cfg.legacy_token };
+    cheat_caller_address_once(
+        contract_address: cfg.legacy_token, caller_address: cfg.owner_l2_address,
+    );
+    legacy_token_dispatcher.transfer(recipient: user_address, :amount);
+    user_address
+}
+
+fn generate_user_address(id: u8) -> ContractAddress {
+    ('USER_ADDRESS' + id.into()).try_into().unwrap()
+}
+
+pub(crate) fn supply_migration_contract_with_native(cfg: USDCMigrationCfg, amount: u256) {
+    let native_dispatcher = IERC20Dispatcher { contract_address: cfg.native_token };
+    cheat_caller_address_once(
+        contract_address: cfg.native_token, caller_address: cfg.owner_l2_address,
+    );
+    native_dispatcher.transfer(recipient: cfg.usdc_migration_contract, :amount);
 }
 
 // TODO: Move to starkware_utils_testing.

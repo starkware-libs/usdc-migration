@@ -1,9 +1,11 @@
 #[starknet::contract]
 pub mod USDCMigration {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use starknet::storage::StoragePointerWriteAccess;
-    use starknet::{ContractAddress, EthAddress};
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, EthAddress, get_caller_address, get_contract_address};
     use starkware_utils::constants::MAX_U256;
+    use usdc_migration::errors::USDCMigrationError;
+    use usdc_migration::events::USDCMigrationEvents;
     use usdc_migration::interface::IUSDCMigration;
 
     #[storage]
@@ -25,6 +27,7 @@ pub mod USDCMigration {
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event { //event variables
+        USDCMigrated: USDCMigrationEvents::USDCMigratedEvent,
     }
 
     #[constructor]
@@ -50,5 +53,27 @@ pub mod USDCMigration {
 
     #[abi(embed_v0)]
     pub impl USDCMigrationImpl of IUSDCMigration<ContractState> { //impl logic
+        fn migrate(ref self: ContractState, amount: u256) {
+            let contract_address = get_contract_address();
+            let native_token_dispatcher = IERC20Dispatcher {
+                contract_address: self.native_token.read(),
+            };
+            assert!(
+                amount <= native_token_dispatcher.balance_of(account: contract_address),
+                "{}",
+                USDCMigrationError::INSUFFICIENT_USDC_BALANCE,
+            );
+
+            let caller_address = get_caller_address();
+            let legacy_token_dispatcher = IERC20Dispatcher {
+                contract_address: self.legacy_token.read(),
+            };
+            legacy_token_dispatcher
+                .transfer_from(sender: caller_address, recipient: contract_address, :amount);
+            native_token_dispatcher.transfer(recipient: caller_address, :amount);
+
+            self.emit(USDCMigrationEvents::USDCMigratedEvent { amount, user: caller_address });
+            // TODO: send to l1 if threshold is reached.
+        }
     }
 }

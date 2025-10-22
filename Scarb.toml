@@ -15,8 +15,8 @@ snforge_std = "0.49.0"
 assert_macros = "2.12.2"
 openzeppelin = "2.0.0"
 openzeppelin_testing = "4.2.0"
-starkware_utils = { git ="https://github.com/starkware-libs/starkware-starknet-utils", rev="123332b0895ce9116fb2eaa2469739250c3f733d" }
-starkware_utils_testing = { git="https://github.com/starkware-libs/starkware-starknet-utils", rev="123332b0895ce9116fb2eaa2469739250c3f733d" }
+starkware_utils = { git ="https://github.com/starkware-libs/starkware-starknet-utils", rev="446c612f9f4bb7f9b72facccd745981ce2ec0109" }
+starkware_utils_testing = { git="https://github.com/starkware-libs/starkware-starknet-utils", rev="446c612f9f4bb7f9b72facccd745981ce2ec0109" }
 
 [workspace.tool.fmt]
 sort-module-level-items = true

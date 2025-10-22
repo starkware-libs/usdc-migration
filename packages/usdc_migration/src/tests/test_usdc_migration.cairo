@@ -1,3 +1,4 @@
+use openzeppelin::access::ownable::interface::{IOwnableDispatcher, IOwnableDispatcherTrait};
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starkware_utils::constants::MAX_U256;
 use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address};
@@ -37,4 +38,7 @@ fn test_constructor() {
         native_dispacther.allowance(owner: usdc_migration_contract, spender: cfg.owner_l2_address),
         MAX_U256,
     );
+    // Assert owner is set correctly.
+    let ownable_dispatcher = IOwnableDispatcher { contract_address: usdc_migration_contract };
+    assert_eq!(ownable_dispatcher.owner(), cfg.owner_l2_address);
 }

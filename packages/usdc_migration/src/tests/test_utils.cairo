@@ -73,3 +73,10 @@ pub(crate) fn load_contract_address(
     let value = snforge_std::load(:target, :storage_address, size: 1);
     (*value[0]).try_into().unwrap()
 }
+
+/// Mock contract to declare a mock class hash for testing upgrade.
+#[starknet::contract]
+pub mod MockContract {
+    #[storage]
+    struct Storage {}
+}

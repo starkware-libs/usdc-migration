@@ -2,18 +2,24 @@
 pub mod USDCMigration {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::upgrades::interface::IUpgradeable;
+    use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
     use starknet::storage::StoragePointerWriteAccess;
-    use starknet::{ContractAddress, EthAddress};
+    use starknet::{ClassHash, ContractAddress, EthAddress};
     use starkware_utils::constants::MAX_U256;
     use usdc_migration::interface::IUSDCMigration;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
     #[storage]
     struct Storage {
         /// Ownable component storage.
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
+        /// Upgradeable component storage.
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
         /// The phased out token being swapped for the new one.
         // TODO: Consider change to dispatcher.
         legacy_token: ContractAddress,
@@ -34,6 +40,7 @@ pub mod USDCMigration {
     #[derive(Drop, starknet::Event)]
     pub enum Event {
         OwnableEvent: OwnableComponent::Event,
+        UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     #[constructor]
@@ -61,6 +68,15 @@ pub mod USDCMigration {
     #[abi(embed_v0)]
     impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
     impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable.upgrade(new_class_hash);
+        }
+    }
 
     #[abi(embed_v0)]
     pub impl USDCMigrationImpl of IUSDCMigration<ContractState> { //impl logic

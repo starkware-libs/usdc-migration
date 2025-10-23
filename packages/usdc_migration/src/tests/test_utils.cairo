@@ -1,5 +1,8 @@
 use constants::{INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS, STARKGATE_ADDRESS};
-use snforge_std::{ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait};
+use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use snforge_std::{
+    ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait, set_balance,
+};
 use starknet::{ContractAddress, EthAddress};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
 
@@ -11,6 +14,7 @@ pub(crate) struct USDCMigrationCfg {
     pub l1_recipient: EthAddress,
     pub owner: ContractAddress,
     pub starkgate_address: ContractAddress,
+    pub initial_contract_supply: u256,
 }
 
 pub(crate) mod constants {
@@ -32,6 +36,12 @@ pub(crate) mod constants {
     pub fn STARKGATE_ADDRESS() -> ContractAddress {
         'STARKGATE_ADDRESS'.try_into().unwrap()
     }
+}
+
+pub(crate) fn generic_test_fixture() -> USDCMigrationCfg {
+    let cfg = deploy_usdc_migration();
+    supply_migration_contract_with_new_token(:cfg, amount: cfg.initial_contract_supply);
+    cfg
 }
 
 pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
@@ -80,7 +90,28 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
         l1_recipient: L1_RECIPIENT(),
         owner: OWNER_ADDRESS(),
         starkgate_address: STARKGATE_ADDRESS(),
+        initial_contract_supply: INITIAL_SUPPLY / 2,
     }
+}
+
+pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, legacy_supply: u256) -> ContractAddress {
+    let user_address = _generate_user_address(:id);
+    set_balance(target: user_address, new_balance: legacy_supply, token: cfg.legacy_token);
+    user_address
+}
+
+fn _generate_user_address(id: u8) -> ContractAddress {
+    ('USER_ADDRESS' + id.into()).try_into().unwrap()
+}
+
+pub(crate) fn supply_migration_contract_with_new_token(cfg: USDCMigrationCfg, amount: u256) {
+    let current_balance = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() }
+        .balance_of(account: cfg.usdc_migration_contract);
+    set_balance(
+        target: cfg.usdc_migration_contract,
+        new_balance: current_balance + amount,
+        token: cfg.new_token,
+    );
 }
 
 // TODO: Move to starkware_utils_testing.

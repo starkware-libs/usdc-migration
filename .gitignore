@@ -37,6 +37,9 @@ yarn-error.log*
 .idea
 .vscode
 
+# Vimdiff
+**.orig
+
 .history
 
 # Vite

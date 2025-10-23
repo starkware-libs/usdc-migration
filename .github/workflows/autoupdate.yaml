@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         env:
-          GITHUB_TOKEN: "${{ secrets.PAT }}"
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           PR_FILTER: "labelled"
           PR_LABELS: "autoupdate"
           PR_READY_STATE: "ready_for_review"
@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: peter-evans/rebase@v3
         with:
-          token: ${{ secrets.PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           base: main
           include-labels: |
             autoupdate-rebase

@@ -9,7 +9,7 @@ pub(crate) struct USDCMigrationCfg {
     pub legacy_token: ContractAddress,
     pub new_token: ContractAddress,
     pub l1_recipient: EthAddress,
-    pub owner_l2_address: ContractAddress,
+    pub owner: ContractAddress,
     pub starkgate_address: ContractAddress,
 }
 
@@ -61,7 +61,7 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
         legacy_token,
         new_token,
         l1_recipient: L1_RECIPIENT(),
-        owner_l2_address: OWNER_ADDRESS(),
+        owner: OWNER_ADDRESS(),
         starkgate_address: STARKGATE_ADDRESS(),
     }
 }

@@ -22,7 +22,7 @@ pub(crate) mod constants {
         * 10_u256.pow(6)
         * 10_u256.pow(6); // 140 * million * decimals
     // TODO: Change to the real value.
-    pub const LEGACY_THRESHOLD: u256 = 100_000;
+    pub const LEGACY_THRESHOLD: u256 = 100_000_000_000_u256;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }

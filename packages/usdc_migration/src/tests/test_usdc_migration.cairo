@@ -7,10 +7,12 @@ fn test_constructor() {
     let usdc_migration_contract = cfg.usdc_migration_contract;
     // Assert contract storage is initialized correctly.
     assert_eq!(
-        cfg.legacy_token, load_contract_address(usdc_migration_contract, selector!("legacy_token")),
+        cfg.legacy_token,
+        load_contract_address(usdc_migration_contract, selector!("legacy_token_dispatcher")),
     );
     assert_eq!(
-        cfg.new_token, load_contract_address(usdc_migration_contract, selector!("new_token")),
+        cfg.new_token,
+        load_contract_address(usdc_migration_contract, selector!("new_token_dispatcher")),
     );
     let l1_recipient = (*snforge_std::load(
         target: usdc_migration_contract, storage_address: selector!("l1_recipient"), size: 1,

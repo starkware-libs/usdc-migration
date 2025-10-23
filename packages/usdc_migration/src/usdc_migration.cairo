@@ -9,11 +9,9 @@ pub mod USDCMigration {
     #[storage]
     struct Storage {
         /// The phased out token being swapped for the new one.
-        // TODO: Consider change to dispatcher.
-        legacy_token: ContractAddress,
+        legacy_token_dispatcher: IERC20Dispatcher,
         /// The new token swapping the legacy one.
-        // TODO: Consider change to dispatcher.
-        new_token: ContractAddress,
+        new_token_dispatcher: IERC20Dispatcher,
         /// Ethereum address to which the legacy token is bridged.
         l1_recipient: EthAddress,
         /// Address in L2 that gets the remaining USDC.
@@ -36,14 +34,14 @@ pub mod USDCMigration {
         owner_l2_address: ContractAddress,
         starkgate_address: ContractAddress,
     ) {
-        self.legacy_token.write(legacy_token);
-        self.new_token.write(new_token);
+        let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token };
+        let new_dispatcher = IERC20Dispatcher { contract_address: new_token };
+        self.legacy_token_dispatcher.write(legacy_dispatcher);
+        self.new_token_dispatcher.write(new_dispatcher);
         self.l1_recipient.write(l1_recipient);
         self.owner_l2_address.write(owner_l2_address);
         self.starkgate_address.write(starkgate_address);
         // Infinite approval to l2 address for both legacy and new tokens.
-        let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token };
-        let new_dispatcher = IERC20Dispatcher { contract_address: new_token };
         legacy_dispatcher.approve(spender: owner_l2_address, amount: MAX_U256);
         new_dispatcher.approve(spender: owner_l2_address, amount: MAX_U256);
     }

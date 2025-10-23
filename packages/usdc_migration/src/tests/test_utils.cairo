@@ -14,11 +14,15 @@ pub(crate) struct USDCMigrationCfg {
 }
 
 pub(crate) mod constants {
+    use core::num::traits::Pow;
     use starknet::{ContractAddress, EthAddress};
 
-    pub const INITIAL_SUPPLY: u256 = 1000000000000000000000000000;
+    // Total legacy USDC supply is ~140 million.
+    pub const INITIAL_SUPPLY: u256 = 140
+        * 10_u256.pow(6)
+        * 10_u256.pow(6); // 140 * million * decimals
     // TODO: Change to the real value.
-    pub const LEGACY_THRESHOLD: u256 = 100000;
+    pub const LEGACY_THRESHOLD: u256 = 100_000;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }

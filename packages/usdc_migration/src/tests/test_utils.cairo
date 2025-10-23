@@ -1,4 +1,4 @@
-use constants::{INITIAL_SUPPLY, L1_RECIPIENT, OWNER_ADDRESS, STARKGATE_ADDRESS};
+use constants::{INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS, STARKGATE_ADDRESS};
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::{ContractAddress, EthAddress};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
@@ -17,6 +17,8 @@ pub(crate) mod constants {
     use starknet::{ContractAddress, EthAddress};
 
     pub const INITIAL_SUPPLY: u256 = 1000000000000000000000000000;
+    // TODO: Change to the real value.
+    pub const LEGACY_THRESHOLD: u256 = 100000;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }
@@ -53,6 +55,7 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     L1_RECIPIENT().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
     STARKGATE_ADDRESS().serialize(ref calldata);
+    LEGACY_THRESHOLD.serialize(ref calldata);
     let usdc_migration_contract = snforge_std::declare("USDCMigration").unwrap().contract_class();
     let (usdc_migration_contract_address, _) = usdc_migration_contract.deploy(@calldata).unwrap();
     // Return the configuration with the deployed contract address.
@@ -72,4 +75,12 @@ pub(crate) fn load_contract_address(
 ) -> ContractAddress {
     let value = snforge_std::load(:target, :storage_address, size: 1);
     (*value[0]).try_into().unwrap()
+}
+
+// TODO: Move to starkware_utils_testing.
+pub(crate) fn load_u256(target: ContractAddress, storage_address: felt252) -> u256 {
+    let value = snforge_std::load(:target, :storage_address, size: 2);
+    let low = (*value[0]).try_into().unwrap();
+    let high = (*value[1]).try_into().unwrap();
+    u256 { low, high }
 }

@@ -18,7 +18,7 @@ pub(crate) mod constants {
 
     pub const INITIAL_SUPPLY: u256 = 1000000000000000000000000000;
     // TODO: Change to the real value.
-    pub const LEGACY_THRESHOLD: u256 = 100000;
+    pub const LEGACY_THRESHOLD: u256 = 100_000_000_000_u256;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }

@@ -10,12 +10,14 @@ use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as Upgrade
 use snforge_std::DeclareResultTrait;
 use starkware_utils::constants::MAX_U256;
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
+use usdc_migration::errors::Errors;
 use usdc_migration::interface::{
     IUSDCMigrationConfigDispatcher, IUSDCMigrationConfigDispatcherTrait,
     IUSDCMigrationConfigSafeDispatcher, IUSDCMigrationConfigSafeDispatcherTrait,
 };
 use usdc_migration::tests::test_utils::constants::LEGACY_THRESHOLD;
 use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_address, load_u256};
+use usdc_migration::usdc_migration::USDCMigration;
 
 #[test]
 fn test_constructor() {
@@ -41,6 +43,9 @@ fn test_constructor() {
         load_contract_address(usdc_migration_contract, selector!("starkgate_address")),
     );
     assert_eq!(LEGACY_THRESHOLD, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(
+        100_000_000_000_u256, load_u256(usdc_migration_contract, selector!("transfer_unit")),
+    );
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: usdc_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
@@ -56,17 +61,51 @@ fn test_constructor() {
 }
 
 #[test]
+#[should_panic(expected: 'Threshold is too small')]
+fn test_constructor_assertions() {
+    let cfg = deploy_usdc_migration();
+    let mut state = USDCMigration::contract_state_for_testing();
+    USDCMigration::constructor(
+        ref state,
+        legacy_token: cfg.legacy_token,
+        new_token: cfg.new_token,
+        l1_recipient: cfg.l1_recipient,
+        owner: cfg.owner,
+        starkgate_address: cfg.starkgate_address,
+        legacy_threshold: 1000,
+    );
+}
+
+#[test]
 fn test_set_legacy_threshold() {
     let cfg = deploy_usdc_migration();
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_cfg_dispatcher = IUSDCMigrationConfigDispatcher {
         contract_address: usdc_migration_contract,
     };
+    let curr_transfer_unit = load_u256(usdc_migration_contract, selector!("transfer_unit"));
     // Set the threshold to a new value.
     let new_threshold = LEGACY_THRESHOLD * 2;
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
     usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: new_threshold);
     assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(
+        100_000_000_000_u256, load_u256(usdc_migration_contract, selector!("transfer_unit")),
+    );
+    // Set the threshold to a new value that is less than the current transfer unit.
+    let new_threshold = curr_transfer_unit - 1;
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(10_000_000_000_u256, load_u256(usdc_migration_contract, selector!("transfer_unit")));
+    // Set the threshold to a new value that is greater than the current transfer unit.
+    let new_threshold = LEGACY_THRESHOLD;
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(
+        100_000_000_000_u256, load_u256(usdc_migration_contract, selector!("transfer_unit")),
+    );
 }
 
 #[test]
@@ -80,6 +119,11 @@ fn test_set_legacy_threshold_assertions() {
     // Catch the owner error.
     let result = usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: LEGACY_THRESHOLD);
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+    // Catch the invalid threshold error.
+    let invalid_threshold = 1000;
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    let result = usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: invalid_threshold);
+    assert_panic_with_felt_error(:result, expected_error: Errors::THRESHOLD_TOO_SMALL);
 }
 
 #[test]

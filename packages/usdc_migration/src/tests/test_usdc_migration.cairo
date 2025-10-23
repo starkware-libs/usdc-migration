@@ -16,6 +16,7 @@ use starkware_utils_testing::test_utils::{
     assert_expected_event_emitted, assert_panic_with_error, assert_panic_with_felt_error,
     cheat_caller_address_once,
 };
+use usdc_migration::errors::Errors;
 use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
 use usdc_migration::interface::{
     IUSDCMigrationAdminDispatcher, IUSDCMigrationAdminDispatcherTrait,
@@ -30,6 +31,8 @@ use usdc_migration::tests::test_utils::{
     deploy_usdc_migration, generic_test_fixture, load_contract_address, load_u256, new_user,
     supply_contract,
 };
+use usdc_migration::usdc_migration::USDCMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
+
 #[test]
 fn test_constructor() {
     let cfg = deploy_usdc_migration();
@@ -56,6 +59,7 @@ fn test_constructor() {
         load_contract_address(usdc_migration_contract, selector!("starkgate_address")),
     );
     assert_eq!(LEGACY_THRESHOLD, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: usdc_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
@@ -82,6 +86,19 @@ fn test_set_legacy_threshold() {
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
     usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
     assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
+    // Set the threshold to a new value that is less than the current transfer unit.
+    let new_threshold = LARGE_BATCH_SIZE - 1;
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(SMALL_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
+    // Set the threshold to a new value that is greater than the current transfer unit.
+    let new_threshold = LEGACY_THRESHOLD;
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
 }
 
 #[test]
@@ -96,6 +113,12 @@ fn test_set_legacy_threshold_assertions() {
     let result = usdc_migration_admin_safe_dispatcher
         .set_legacy_threshold(threshold: LEGACY_THRESHOLD);
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+    // Catch the invalid threshold error.
+    let invalid_threshold = 1000;
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    let result = usdc_migration_admin_safe_dispatcher
+        .set_legacy_threshold(threshold: invalid_threshold);
+    assert_panic_with_felt_error(:result, expected_error: Errors::THRESHOLD_TOO_SMALL);
 }
 
 #[test]

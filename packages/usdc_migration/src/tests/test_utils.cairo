@@ -1,13 +1,13 @@
 use constants::{INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS, STARKGATE_ADDRESS};
-use snforge_std::{ContractClassTrait, DeclareResultTrait};
+use snforge_std::{ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait};
 use starknet::{ContractAddress, EthAddress};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
 
 #[derive(Debug, Drop, Copy)]
 pub(crate) struct USDCMigrationCfg {
     pub usdc_migration_contract: ContractAddress,
-    pub legacy_token: ContractAddress,
-    pub new_token: ContractAddress,
+    pub legacy_token: Token,
+    pub new_token: Token,
     pub l1_recipient: EthAddress,
     pub owner: ContractAddress,
     pub starkgate_address: ContractAddress,
@@ -50,12 +50,22 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     };
     let legacy_state = legacy_config.deploy();
     let new_state = new_config.deploy();
-    let legacy_token = legacy_state.address;
-    let new_token = new_state.address;
+    let legacy_token = Token::Custom(
+        CustomToken {
+            contract_address: legacy_state.address,
+            balances_variable_selector: selector!("ERC20_balances"),
+        },
+    );
+    let new_token = Token::Custom(
+        CustomToken {
+            contract_address: new_state.address,
+            balances_variable_selector: selector!("ERC20_balances"),
+        },
+    );
     // Deploy USDCMigration contract.
     let mut calldata = ArrayTrait::new();
-    legacy_token.serialize(ref calldata);
-    new_token.serialize(ref calldata);
+    legacy_token.contract_address().serialize(ref calldata);
+    new_token.contract_address().serialize(ref calldata);
     L1_RECIPIENT().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
     STARKGATE_ADDRESS().serialize(ref calldata);

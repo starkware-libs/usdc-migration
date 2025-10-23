@@ -7,7 +7,7 @@ use openzeppelin::upgrades::interface::{
     IUpgradeableSafeDispatcherTrait,
 };
 use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as UpgradeableErrors;
-use snforge_std::DeclareResultTrait;
+use snforge_std::{DeclareResultTrait, TokenTrait};
 use starkware_utils::constants::MAX_U256;
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use usdc_migration::interface::{
@@ -21,13 +21,15 @@ use usdc_migration::tests::test_utils::{deploy_usdc_migration, load_contract_add
 fn test_constructor() {
     let cfg = deploy_usdc_migration();
     let usdc_migration_contract = cfg.usdc_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let new_token_address = cfg.new_token.contract_address();
     // Assert contract storage is initialized correctly.
     assert_eq!(
-        cfg.legacy_token,
+        legacy_token_address,
         load_contract_address(usdc_migration_contract, selector!("legacy_token_dispatcher")),
     );
     assert_eq!(
-        cfg.new_token,
+        new_token_address,
         load_contract_address(usdc_migration_contract, selector!("new_token_dispatcher")),
     );
     let l1_recipient = (*snforge_std::load(
@@ -45,8 +47,8 @@ fn test_constructor() {
     let ownable_dispatcher = IOwnableDispatcher { contract_address: usdc_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
     // Assert infinite approval to owner for both legacy and new tokens.
-    let legacy_dispatcher = IERC20Dispatcher { contract_address: cfg.legacy_token };
-    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token };
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
     assert_eq!(
         legacy_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
     );

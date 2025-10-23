@@ -7,6 +7,7 @@ pub mod USDCMigration {
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use starknet::{ClassHash, ContractAddress, EthAddress, get_contract_address};
     use starkware_utils::constants::MAX_U256;
+    use usdc_migration::errors::Error;
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -30,6 +31,8 @@ pub mod USDCMigration {
         starkgate_address: ContractAddress,
         /// The threshold amount of legacy token balance, that triggers sending to L1.
         legacy_threshold: u256,
+        /// Whether the L1 recipient address is verified.
+        l1_recipient_verified: bool,
     }
 
     #[event]
@@ -108,9 +111,21 @@ pub mod USDCMigration {
         }
     }
 
+    /// Verify the L1 recipient address is a reachable address.
+    // TODO: Test.
+    #[l1_handler]
+    fn verify_l1_recipient(ref self: ContractState, from_address: felt252) {
+        // TODO: Not panic here?
+        assert!(from_address == self.l1_recipient.read().into(), "{}", Error::VERIFY_L1_FAILED);
+        self.l1_recipient_verified.write(true);
+        // TODO: Emit event?
+    }
+
     #[generate_trait]
     impl InternalFunctions of InternalTrait {
+        // TODO: Catch error in tests in every function that calls this.
         fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
+            assert!(self.l1_recipient_verified.read(), "{}", Error::L1_RECIPIENT_NOT_VERIFIED);
             // TODO: implement this.
             // TODO: Event.
             return;

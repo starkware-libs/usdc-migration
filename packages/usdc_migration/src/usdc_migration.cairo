@@ -7,7 +7,11 @@ pub mod USDCMigration {
     use starknet::storage::StoragePointerWriteAccess;
     use starknet::{ClassHash, ContractAddress, EthAddress};
     use starkware_utils::constants::MAX_U256;
+    use usdc_migration::errors::Error;
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationConfig};
+
+    /// Fixed set of transfer units used when bridging the legacy token to L1.
+    pub(crate) const FIXED_TRANSFER_UNITS: [u256; 2] = [10000_u256, 100000_u256];
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -30,6 +34,9 @@ pub mod USDCMigration {
         starkgate_address: ContractAddress,
         /// The threshold amount of legacy token balance, that triggers sending to L1.
         legacy_threshold: u256,
+        /// The current transfer unit in use, chosen from FIXED_TRANSFER_UNITS.
+        /// This specifies the precise token amount sent to L1 in a single transaction.
+        curr_transfer_unit: u256,
     }
 
     #[event]
@@ -40,7 +47,7 @@ pub mod USDCMigration {
     }
 
     #[constructor]
-    fn constructor(
+    pub(crate) fn constructor(
         ref self: ContractState,
         legacy_token: ContractAddress,
         new_token: ContractAddress,
@@ -55,7 +62,11 @@ pub mod USDCMigration {
         self.new_token_dispatcher.write(new_dispatcher);
         self.l1_recipient.write(l1_recipient);
         self.starkgate_address.write(starkgate_address);
+        let mut transfer_units = FIXED_TRANSFER_UNITS.span();
+        let last_transfer_unit = *transfer_units.pop_back().unwrap();
+        assert!(last_transfer_unit <= legacy_threshold, "{}", Error::INVALID_LEGACY_THRESHOLD);
         self.legacy_threshold.write(legacy_threshold);
+        self.curr_transfer_unit.write(last_transfer_unit);
         self.ownable.initializer(:owner);
         // Infinite approval to l2 address for both legacy and new tokens.
         legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
@@ -83,11 +94,20 @@ pub mod USDCMigration {
     pub impl USDCMigrationConfigImpl of IUSDCMigrationConfig<ContractState> { //impl logic
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
-            // TODO: Assert the given threshold is valid according to the fixed transfer units.
-            // TODO: Allow threshold zero?
+            let transfer_units = FIXED_TRANSFER_UNITS.span();
+            assert!(threshold >= *transfer_units[0], "{}", Error::INVALID_LEGACY_THRESHOLD);
             self.legacy_threshold.write(threshold);
-            // TODO: Update transfer unit accordingly.
-        // TODO: Emit event?
+            // Infer the transfer unit from the threshold.
+            let mut i = transfer_units.len() - 1;
+            while i >= 0 {
+                let transfer_unit = *transfer_units[i];
+                if transfer_unit <= threshold {
+                    self.curr_transfer_unit.write(transfer_unit);
+                    break;
+                }
+                i -= 1;
+            }
+            // TODO: Emit event?
         // TODO: Send to L1 here according the new threshold?
         }
     }

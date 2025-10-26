@@ -28,8 +28,7 @@ use usdc_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, LEGACY_THRESHOLD,
 };
 use usdc_migration::tests::test_utils::{
-    deploy_usdc_migration, generic_test_fixture, load_contract_address, load_u256, new_user,
-    supply_contract,
+    deploy_usdc_migration, generic_load, generic_test_fixture, new_user, supply_contract,
 };
 use usdc_migration::usdc_migration::USDCMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
 
@@ -42,24 +41,21 @@ fn test_constructor() {
     // Assert contract storage is initialized correctly.
     assert_eq!(
         legacy_token_address,
-        load_contract_address(usdc_migration_contract, selector!("legacy_token_dispatcher")),
+        generic_load(usdc_migration_contract, selector!("legacy_token_dispatcher")),
     );
     assert_eq!(
-        new_token_address,
-        load_contract_address(usdc_migration_contract, selector!("new_token_dispatcher")),
+        new_token_address, generic_load(usdc_migration_contract, selector!("new_token_dispatcher")),
     );
-    let l1_recipient = (*snforge_std::load(
-        target: usdc_migration_contract, storage_address: selector!("l1_recipient"), size: 1,
-    )[0])
-        .try_into()
-        .unwrap();
+    let l1_recipient = generic_load(usdc_migration_contract, selector!("l1_recipient"));
     assert_eq!(cfg.l1_recipient, l1_recipient);
     assert_eq!(
         cfg.starkgate_address,
-        load_contract_address(usdc_migration_contract, selector!("starkgate_address")),
+        generic_load(usdc_migration_contract, selector!("starkgate_address")),
     );
-    assert_eq!(LEGACY_THRESHOLD, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
-    assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
+    assert_eq!(
+        LEGACY_THRESHOLD, generic_load(usdc_migration_contract, selector!("legacy_threshold")),
+    );
+    assert_eq!(LARGE_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: usdc_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
@@ -76,20 +72,20 @@ fn test_set_legacy_threshold() {
     let new_threshold = LEGACY_THRESHOLD * 2;
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
     usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
-    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
-    assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
+    assert_eq!(new_threshold, generic_load(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(LARGE_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
     // Set the threshold to a new value that is less than the current transfer unit.
     let new_threshold = LARGE_BATCH_SIZE - 1;
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
     usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
-    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
-    assert_eq!(SMALL_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
+    assert_eq!(new_threshold, generic_load(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(SMALL_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
     // Set the threshold to a new value that is greater than the current transfer unit.
     let new_threshold = LEGACY_THRESHOLD;
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
     usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
-    assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
-    assert_eq!(LARGE_BATCH_SIZE, load_u256(usdc_migration_contract, selector!("batch_size")));
+    assert_eq!(new_threshold, generic_load(usdc_migration_contract, selector!("legacy_threshold")));
+    assert_eq!(LARGE_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
 }
 
 #[test]

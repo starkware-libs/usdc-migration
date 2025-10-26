@@ -3,6 +3,9 @@ pub trait IUSDCMigration<T> {
     /// Swaps `amount` of legacy token for new token.
     /// Precondition: Caller has approved the contract to spend `amount` of legacy token.
     fn swap_to_new(ref self: T, amount: u256);
+    /// Swaps `amount` of new token for legacy token.
+    /// Precondition: Caller has approved the contract to spend `amount` of new token.
+    fn swap_to_legacy(ref self: T, amount: u256);
 }
 
 #[starknet::interface]

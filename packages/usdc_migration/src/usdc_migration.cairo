@@ -91,6 +91,15 @@ pub mod USDCMigration {
                 );
             // TODO: send to l1 if threshold is reached.
         }
+
+        fn swap_to_legacy(ref self: ContractState, amount: u256) {
+            self
+                ._swap(
+                    from_token_dispatcher: self.new_token_dispatcher.read(),
+                    to_token_dispatcher: self.legacy_token_dispatcher.read(),
+                    :amount,
+                );
+        }
     }
 
     #[abi(embed_v0)]

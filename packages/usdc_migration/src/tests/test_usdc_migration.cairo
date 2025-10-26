@@ -243,3 +243,88 @@ fn test_verify_owner_l2_address() {
         new_dispatcher.allowance(owner: usdc_migration_contract, spender: cfg.owner), MAX_U256,
     );
 }
+
+// TODO: Consider refactoring swap tests to use common code.
+#[test]
+fn test_swap_to_legacy() {
+    let cfg = deploy_usdc_migration();
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let new_token_address = cfg.new_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
+
+    // Supply user and contract.
+    supply_contract(target: user, token: cfg.new_token, :amount);
+    supply_contract(target: usdc_migration_contract, token: cfg.legacy_token, :amount);
+
+    // Spy events.
+    let mut spy = spy_events();
+
+    // Approve and migrate.
+    cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
+    new_dispatcher.approve(spender: usdc_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    usdc_migration_dispatcher.swap_to_legacy(:amount);
+
+    // Assert user balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
+    assert_eq!(new_dispatcher.balance_of(account: user), Zero::zero());
+
+    // Assert contract balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+    assert_eq!(new_dispatcher.balance_of(account: usdc_migration_contract), amount);
+
+    // Assert event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "migrate");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: USDCMigrated {
+            user, from_token: new_token_address, to_token: legacy_token_address, amount,
+        },
+        expected_event_selector: @selector!("USDCMigrated"),
+        expected_event_name: "USDCMigrated",
+    );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_swap_to_legacy_assertions() {
+    let cfg = deploy_usdc_migration();
+    let amount = INITIAL_SUPPLY / 10;
+    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_safe_dispatcher = IUSDCMigrationSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let new_token_address = cfg.new_token.contract_address();
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
+
+    // Insufficient user balance.
+    cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
+    new_dispatcher.approve(spender: usdc_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+
+    // Insufficient allowance.
+    supply_contract(target: user, token: cfg.new_token, :amount);
+    cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
+    new_dispatcher.approve(spender: usdc_migration_contract, amount: amount / 2);
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_ALLOWANCE.describe());
+
+    // Insufficient contract balance.
+    cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
+    new_dispatcher.approve(spender: usdc_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+}

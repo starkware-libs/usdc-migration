@@ -10,8 +10,14 @@ pub mod USDCMigration {
     };
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
+    use usdc_migration::errors::Errors;
     use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
+
+    pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
+    pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
+    /// Fixed set of batch sizes used when bridging the legacy token to L1.
+    pub(crate) const FIXED_BATCH_SIZES: [u256; 2] = [SMALL_BATCH_SIZE, LARGE_BATCH_SIZE];
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -34,6 +40,9 @@ pub mod USDCMigration {
         starkgate_address: ContractAddress,
         /// The threshold amount of legacy token balance, that triggers sending to L1.
         legacy_threshold: u256,
+        /// The exact amount of legacy token sent to L1 in a single withdraw action.
+        /// Must be a value from FIXED_BATCH_SIZES.
+        batch_size: u256,
     }
 
     #[event]
@@ -60,7 +69,9 @@ pub mod USDCMigration {
         self.new_token_dispatcher.write(new_dispatcher);
         self.l1_recipient.write(l1_recipient);
         self.starkgate_address.write(starkgate_address);
+        assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
         self.legacy_threshold.write(legacy_threshold);
+        self.batch_size.write(LARGE_BATCH_SIZE);
         self.ownable.initializer(:owner);
     }
 
@@ -94,11 +105,20 @@ pub mod USDCMigration {
     pub impl AdminFunctions of IUSDCMigrationAdmin<ContractState> { //impl logic
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
-            // TODO: Assert the given threshold is valid according to the fixed transfer units.
-            // TODO: Allow threshold zero?
+            let batch_sizes = FIXED_BATCH_SIZES.span();
+            assert(threshold >= *batch_sizes[0], Errors::THRESHOLD_TOO_SMALL);
             self.legacy_threshold.write(threshold);
-            // TODO: Update transfer unit accordingly.
-        // TODO: Emit event?
+            // Infer the batch size from the threshold.
+            let mut i = batch_sizes.len() - 1;
+            while i >= 0 {
+                let batch_size = *batch_sizes[i];
+                if batch_size <= threshold {
+                    self.batch_size.write(batch_size);
+                    break;
+                }
+                i -= 1;
+            }
+            // TODO: Emit event?
         // TODO: Send to L1 here according the new threshold?
         }
 

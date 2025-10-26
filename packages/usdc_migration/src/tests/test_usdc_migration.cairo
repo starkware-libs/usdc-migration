@@ -18,8 +18,8 @@ use starkware_utils_testing::test_utils::{
 };
 use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
 use usdc_migration::interface::{
-    IUSDCMigrationConfigDispatcher, IUSDCMigrationConfigDispatcherTrait,
-    IUSDCMigrationConfigSafeDispatcher, IUSDCMigrationConfigSafeDispatcherTrait,
+    IUSDCMigrationAdminDispatcher, IUSDCMigrationAdminDispatcherTrait,
+    IUSDCMigrationAdminSafeDispatcher, IUSDCMigrationAdminSafeDispatcherTrait,
     IUSDCMigrationDispatcher, IUSDCMigrationDispatcherTrait, IUSDCMigrationSafeDispatcher,
     IUSDCMigrationSafeDispatcherTrait,
 };
@@ -74,13 +74,13 @@ fn test_constructor() {
 fn test_set_legacy_threshold() {
     let cfg = deploy_usdc_migration();
     let usdc_migration_contract = cfg.usdc_migration_contract;
-    let usdc_migration_cfg_dispatcher = IUSDCMigrationConfigDispatcher {
+    let usdc_migration_admin_dispatcher = IUSDCMigrationAdminDispatcher {
         contract_address: usdc_migration_contract,
     };
     // Set the threshold to a new value.
     let new_threshold = LEGACY_THRESHOLD * 2;
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
-    usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
     assert_eq!(new_threshold, load_u256(usdc_migration_contract, selector!("legacy_threshold")));
 }
 
@@ -89,11 +89,12 @@ fn test_set_legacy_threshold() {
 fn test_set_legacy_threshold_assertions() {
     let cfg = deploy_usdc_migration();
     let usdc_migration_contract = cfg.usdc_migration_contract;
-    let usdc_migration_cfg_dispatcher = IUSDCMigrationConfigSafeDispatcher {
+    let usdc_migration_admin_safe_dispatcher = IUSDCMigrationAdminSafeDispatcher {
         contract_address: usdc_migration_contract,
     };
     // Catch the owner error.
-    let result = usdc_migration_cfg_dispatcher.set_legacy_threshold(threshold: LEGACY_THRESHOLD);
+    let result = usdc_migration_admin_safe_dispatcher
+        .set_legacy_threshold(threshold: LEGACY_THRESHOLD);
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 }
 
@@ -211,4 +212,16 @@ fn test_swap_to_new_assertions() {
     cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
     let res = usdc_migration_safe_dispatcher.swap_to_new(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_send_legacy_balance_to_l1_assertions() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_admin_safe_dispatcher = IUSDCMigrationAdminSafeDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let result = usdc_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
+    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 }

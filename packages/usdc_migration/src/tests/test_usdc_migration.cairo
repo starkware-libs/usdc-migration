@@ -226,6 +226,11 @@ fn test_swap_to_new_assertions() {
     cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
     let res = usdc_migration_safe_dispatcher.swap_to_new(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+
+    // Amount is zero.
+    cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_new(amount: Zero::zero());
+    assert_panic_with_felt_error(res, Errors::AMOUNT_IS_ZERO);
 }
 
 #[test]
@@ -350,4 +355,9 @@ fn test_swap_to_legacy_assertions() {
     cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
     let res = usdc_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+
+    // Amount is zero.
+    cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
+    let res = usdc_migration_safe_dispatcher.swap_to_legacy(amount: Zero::zero());
+    assert_panic_with_felt_error(res, Errors::AMOUNT_IS_ZERO);
 }

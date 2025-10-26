@@ -160,6 +160,7 @@ pub mod USDCMigration {
             to_token: IERC20Dispatcher,
             amount: u256,
         ) {
+            assert(amount > 0, Errors::AMOUNT_IS_ZERO);
             let contract_address = get_contract_address();
             let user = get_caller_address();
             from_token.checked_transfer_from(sender: user, recipient: contract_address, :amount);

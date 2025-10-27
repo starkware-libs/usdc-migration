@@ -24,11 +24,16 @@ use token_migration::interface::{
     ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
     ITokenMigrationSafeDispatcherTrait,
 };
+use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use token_migration::tests::test_utils::constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, LEGACY_THRESHOLD,
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
 };
 use token_migration::tests::test_utils::{
-    deploy_token_migration, generic_load, generic_test_fixture, new_user, supply_contract,
+    deploy_mock_bridge, deploy_tokens, deploy_token_migration, generic_load, generic_test_fixture,
+    new_user, supply_contract,
+};
+use token_migration::tests::token_bridge_mock::{
+    ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
 };
 use token_migration::token_migration::TokenMigration::{
     LARGE_BATCH_SIZE, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
@@ -162,7 +167,7 @@ fn test_upgrade_assertions() {
 fn test_swap_to_new() {
     let cfg = generic_test_fixture();
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_dispatcher = ITokenMigrationDispatcher {
         contract_address: token_migration_contract,
@@ -217,7 +222,7 @@ fn test_swap_to_new_zero() {
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
     let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
 
     // Zero swap.
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
@@ -235,7 +240,7 @@ fn test_swap_to_new_zero() {
 fn test_swap_to_new_assertions() {
     let cfg = deploy_token_migration();
     let amount = INITIAL_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
         contract_address: token_migration_contract,
@@ -312,7 +317,7 @@ fn test_verify_owner_l2_address() {
 fn test_swap_to_legacy() {
     let cfg = deploy_token_migration();
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_dispatcher = ITokenMigrationDispatcher {
         contract_address: token_migration_contract,
@@ -368,7 +373,7 @@ fn test_swap_to_legacy_zero() {
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
     let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
 
     // Zero swap.
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
@@ -386,7 +391,7 @@ fn test_swap_to_legacy_zero() {
 fn test_swap_to_legacy_assertions() {
     let cfg = deploy_token_migration();
     let amount = INITIAL_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
         contract_address: token_migration_contract,
@@ -415,4 +420,29 @@ fn test_swap_to_legacy_assertions() {
     cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+}
+
+#[test]
+fn test_token_bridge_mock() {
+    let starkgate_address = deploy_mock_bridge();
+    let (legacy_token, _) = deploy_tokens(owner: starkgate_address);
+    let l2_token_address = legacy_token.contract_address();
+    ITokenBridgeMockDispatcher { contract_address: starkgate_address }
+        .set_bridged_token(:l2_token_address, l1_token_address: L1_TOKEN_ADDRESS());
+    let amount = 10_000_000_000_000;
+    let user = new_user(id: 0, token: legacy_token, initial_balance: amount);
+    let l2_bridge = ITokenBridgeDispatcher { contract_address: starkgate_address };
+
+    cheat_caller_address_once(contract_address: starkgate_address, caller_address: user);
+    l2_bridge
+        .initiate_token_withdraw(
+            l1_token: L1_TOKEN_ADDRESS(), l1_recipient: L1_RECIPIENT(), amount: amount / 2,
+        );
+
+    assert_eq!(
+        IERC20Dispatcher { contract_address: legacy_token.contract_address() }
+            .balance_of(account: user),
+        amount / 2,
+    );
+    assert_eq!(l2_bridge.get_l1_token(l2_token: l2_token_address), L1_TOKEN_ADDRESS());
 }

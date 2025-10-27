@@ -1,5 +1,5 @@
 <div align="center">
-  <img alt="Cairo Logo" src="cairo_logo.png" width="200">
+  <img alt="Starknet Logo" src="assets/starknet-dark.png">
 </div>
 
 <div align="center">
@@ -7,7 +7,7 @@
 [![License: Apache2.0](https://img.shields.io/badge/License-Apache2.0-green.svg)](LICENSE)
 </div>
 
-# Template Cairo Repo
+# USDC Migration Contract
 
 ## Title
 
@@ -16,8 +16,9 @@
 ## Content
 
 - [Overview](#overview)
+- [API Reference](#api-reference)
 - [Dependencies](#dependencies)
-- [Installation](#installation)
+- [Deployment](#deployment)
 - [Getting help](#getting-help)
 - [Build and Test](#build-and-test)
 - [Audit](#audit)
@@ -25,47 +26,21 @@
 
 ## Overview
 
-This a template repo for new Cairo projects, use this repo as a start.
-You can fork the repo or start a new repo and do the following:
+This contract aims to aid starknet users in migrating their USDC.e tokens into USDC without having to withdraw them on L1 themselves.
 
-In this repo run
-
-```bash
-git clone https://github.com/starkware-libs/template-cairo-repo.git
-cd template-cairo-repo
-git log --oneline
-git format-patch -1 <commit_hash>
-```
-This will create a file like 0001-Your-commit-message.patch.
-
-In the new repo run
-```bash
-git clone https://github.com/username/new-repo.git
-cd new-repo
-git am ../template-cairo-repo/0001-Your-commit-message.patch
-git push origin dev
-```
-
-Make sure to edit Scarb.toml to define workspace in this repo.
-
-
-| Smart contract   | Description                                                                                                                            |
-|------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| [Smart Contract 1](packages/smart_contract_1)             | Smart contract 1 description                                                                                                 |
-| [Smart Contract 2](packages/smart_Contract_2)          | Smart contract 2 description                                                        |
-| [ETC...](packages/etc)       | Etc...                                                                  |
+## API Reference
+- `swap_to_new(amount: u256)` - Exchange legacy tokens for new ones (1:1 ratio).
+  - Precondition: sufficient allowance.
+- `swap_to_legacy(amount: u256)` - Exchange new tokens for legacy ones (1:1 ratio).
+  - Precondition: sufficient allowance.
 
 ## Dependencies
 
 - Cairo dependencies such as [Scarb](https://docs.swmansion.com/scarb/) and [Starknet foundry](https://foundry-rs.github.io/starknet-foundry/index.html) - install using [starkup](https://github.com/software-mansion/starkup).
 
-## Installation
+## Deployment
 
-Clone the repo and from within the projects root folder run:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.dev | sh
-```
+Declare and deploy the `USDCMigration` contract on Starknet.
 
 ## Getting help
 

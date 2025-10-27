@@ -272,6 +272,34 @@ fn test_swap_to_new_assertions() {
 }
 
 #[test]
+fn test_send_legacy_balance_to_l1() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let amount = LEGACY_THRESHOLD - 1;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Swap without triggering send to l1.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract, :user, :amount, token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
+
+    // Send balance to l1.
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    token_migration_admin_dispatcher.send_legacy_balance_to_l1();
+
+    // Assert balance was cleared.
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), Zero::zero());
+}
+
+#[test]
 #[feature("safe_dispatcher")]
 fn test_send_legacy_balance_to_l1_assertions() {
     let cfg = deploy_token_migration();
@@ -589,4 +617,3 @@ fn test_swap_send_to_l1_multiple_sends() {
         legacy_dispatcher.balance_of(account: token_migration_contract), LEGACY_THRESHOLD * 2 / 3,
     );
 }
-

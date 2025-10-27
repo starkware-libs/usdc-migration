@@ -10,8 +10,8 @@ use starknet::{ContractAddress, EthAddress, Store};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
 
 #[derive(Debug, Drop, Copy)]
-pub(crate) struct USDCMigrationCfg {
-    pub usdc_migration_contract: ContractAddress,
+pub(crate) struct TokenMigrationCfg {
+    pub token_migration_contract: ContractAddress,
     pub legacy_token: Token,
     pub new_token: Token,
     pub l1_recipient: EthAddress,
@@ -22,7 +22,7 @@ pub(crate) struct USDCMigrationCfg {
 pub(crate) mod constants {
     use core::num::traits::Pow;
     use starknet::{ContractAddress, EthAddress};
-    use crate::usdc_migration::USDCMigration::LARGE_BATCH_SIZE;
+    use crate::token_migration::TokenMigration::LARGE_BATCH_SIZE;
 
     // Total legacy USDC supply is ~140 million.
     pub const INITIAL_SUPPLY: u256 = 140
@@ -42,24 +42,24 @@ pub(crate) mod constants {
     }
 }
 
-pub(crate) fn generic_test_fixture() -> USDCMigrationCfg {
-    let cfg = deploy_usdc_migration();
+pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
+    let cfg = deploy_token_migration();
     supply_contract(
-        target: cfg.usdc_migration_contract, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
+        target: cfg.token_migration_contract, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
     );
     cfg
 }
 
 fn deploy_tokens() -> (Token, Token) {
     let legacy_config = TokenConfig {
-        name: "Legacy-USDC",
-        symbol: "Legacy-USDC",
+        name: "Legacy-Token",
+        symbol: "Legacy-Token",
         initial_supply: INITIAL_SUPPLY,
         owner: OWNER_ADDRESS(),
     };
     let new_config = TokenConfig {
-        name: "new-USDC",
-        symbol: "new-USDC",
+        name: "New-Token",
+        symbol: "New-Token",
         initial_supply: INITIAL_SUPPLY,
         owner: OWNER_ADDRESS(),
     };
@@ -80,7 +80,7 @@ fn deploy_tokens() -> (Token, Token) {
     (legacy_token, new_token)
 }
 
-pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
+pub(crate) fn deploy_token_migration() -> TokenMigrationCfg {
     let (legacy_token, new_token) = deploy_tokens();
     let mut calldata = ArrayTrait::new();
     legacy_token.contract_address().serialize(ref calldata);
@@ -89,11 +89,11 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     OWNER_ADDRESS().serialize(ref calldata);
     STARKGATE_ADDRESS().serialize(ref calldata);
     LEGACY_THRESHOLD.serialize(ref calldata);
-    let usdc_migration_contract = snforge_std::declare("USDCMigration").unwrap().contract_class();
-    let (usdc_migration_contract_address, _) = usdc_migration_contract.deploy(@calldata).unwrap();
+    let token_migration_contract = snforge_std::declare("TokenMigration").unwrap().contract_class();
+    let (token_migration_contract_address, _) = token_migration_contract.deploy(@calldata).unwrap();
     // Return the configuration with the deployed contract address.
-    USDCMigrationCfg {
-        usdc_migration_contract: usdc_migration_contract_address,
+    TokenMigrationCfg {
+        token_migration_contract: token_migration_contract_address,
         legacy_token,
         new_token,
         l1_recipient: L1_RECIPIENT(),
@@ -102,7 +102,7 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     }
 }
 
-pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, legacy_supply: u256) -> ContractAddress {
+pub(crate) fn new_user(cfg: TokenMigrationCfg, id: u8, legacy_supply: u256) -> ContractAddress {
     let user_address = _generate_user_address(:id);
     set_balance(target: user_address, new_balance: legacy_supply, token: cfg.legacy_token);
     user_address

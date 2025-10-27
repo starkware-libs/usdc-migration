@@ -146,7 +146,6 @@ pub mod TokenMigration {
         // TODO: Send to L1 here according the new threshold?
         }
 
-        // TODO: Test
         fn send_legacy_balance_to_l1(self: @ContractState) {
             self.ownable.assert_only_owner();
             let legacy_token = self.legacy_token_dispatcher.read();

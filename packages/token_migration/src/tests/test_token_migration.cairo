@@ -29,14 +29,14 @@ use token_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
 };
 use token_migration::tests::test_utils::{
-    deploy_mock_bridge, deploy_tokens, deploy_token_migration, generic_load, generic_test_fixture,
-    new_user, supply_contract,
+    approve_and_swap_to_new, deploy_mock_bridge, deploy_token_migration, deploy_tokens,
+    generic_load, generic_test_fixture, new_user, supply_contract,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
 };
 use token_migration::token_migration::TokenMigration::{
-    LARGE_BATCH_SIZE, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
+    LARGE_BATCH_SIZE, MAX_BATCH_COUNT, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
 };
 
 #[test]
@@ -58,7 +58,7 @@ fn test_constructor() {
     assert_eq!(cfg.l1_recipient, l1_recipient);
     assert_eq!(
         cfg.starkgate_address,
-        generic_load(token_migration_contract, selector!("starkgate_address")),
+        generic_load(token_migration_contract, selector!("starkgate_dispatcher")),
     );
     assert_eq!(
         LEGACY_THRESHOLD, generic_load(token_migration_contract, selector!("legacy_threshold")),
@@ -166,7 +166,7 @@ fn test_upgrade_assertions() {
 #[test]
 fn test_swap_to_new() {
     let cfg = generic_test_fixture();
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_dispatcher = ITokenMigrationDispatcher {
@@ -239,7 +239,7 @@ fn test_swap_to_new_zero() {
 #[feature("safe_dispatcher")]
 fn test_swap_to_new_assertions() {
     let cfg = deploy_token_migration();
-    let amount = INITIAL_SUPPLY / 10;
+    let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
@@ -446,3 +446,147 @@ fn test_token_bridge_mock() {
     );
     assert_eq!(l2_bridge.get_l1_token(l2_token: l2_token_address), L1_TOKEN_ADDRESS());
 }
+
+#[test]
+fn test_swap_send_to_l1() {
+    let cfg = generic_test_fixture();
+    let amount_1 = LEGACY_THRESHOLD - 1;
+    let amount_2 = 1;
+    let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount_1);
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount_2);
+    let token_migration_contract = cfg.token_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Swap without passing the threshold.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_1,
+        amount: amount_1,
+        token: cfg.legacy_token,
+    );
+
+    // Assert contract balance (send has not been triggered).
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount_1);
+
+    // Pass the threshold.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_2,
+        amount: amount_2,
+        token: cfg.legacy_token,
+    );
+
+    // Assert contract balance (send has been triggered).
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), 0);
+}
+
+#[test]
+fn test_swap_send_to_l1_too_many_batches() {
+    let cfg = deploy_token_migration();
+    let amount = LEGACY_THRESHOLD * MAX_BATCH_COUNT + LEGACY_THRESHOLD / 2;
+    let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount);
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount);
+    let token_migration_contract = cfg.token_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Trigger `MAX_BATCH_COUNT` batches.
+    supply_contract(target: token_migration_contract, token: cfg.new_token, :amount);
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_1,
+        :amount,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(
+        legacy_dispatcher.balance_of(account: token_migration_contract), LEGACY_THRESHOLD / 2,
+    );
+
+    // Attempt to trigger `MAX_BATCH_COUNT + 1` batches.
+    supply_contract(target: token_migration_contract, token: cfg.new_token, :amount);
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_2,
+        :amount,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), LEGACY_THRESHOLD);
+}
+
+#[test]
+fn test_swap_send_to_l1_multiple_batches() {
+    let cfg = generic_test_fixture();
+    let to_send = LEGACY_THRESHOLD * 10;
+    let left_over = LEGACY_THRESHOLD / 2;
+    let amount = to_send + left_over;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let token_migration_contract = cfg.token_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Swap for 10 batches.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract, :user, :amount, token: cfg.legacy_token,
+    );
+
+    // Assert contract balance (send has been triggered).
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), left_over);
+}
+
+#[test]
+fn test_swap_send_to_l1_multiple_sends() {
+    let cfg = generic_test_fixture();
+    let amount_1 = LEGACY_THRESHOLD / 2;
+    let amount_2 = LEGACY_THRESHOLD * 3 / 2;
+    let amount_3 = LEGACY_THRESHOLD * 4 / 3;
+    let amount_4 = LEGACY_THRESHOLD * 10 / 3;
+    let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount_1);
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount_2);
+    let user_3 = new_user(id: 3, token: cfg.legacy_token, initial_balance: amount_3);
+    let user_4 = new_user(id: 4, token: cfg.legacy_token, initial_balance: amount_4);
+    let token_migration_contract = cfg.token_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Swap for user 1.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_1,
+        amount: amount_1,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount_1);
+
+    // Swap for user 2.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_2,
+        amount: amount_2,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), Zero::zero());
+
+    // Swap for user 3.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_3,
+        amount: amount_3,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(
+        legacy_dispatcher.balance_of(account: token_migration_contract), LEGACY_THRESHOLD / 3,
+    );
+
+    // Swap for user 4.
+    approve_and_swap_to_new(
+        migration_contract: token_migration_contract,
+        user: user_4,
+        amount: amount_4,
+        token: cfg.legacy_token,
+    );
+    assert_eq!(
+        legacy_dispatcher.balance_of(account: token_migration_contract), LEGACY_THRESHOLD * 2 / 3,
+    );
+}
+

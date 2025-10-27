@@ -119,11 +119,12 @@ pub(crate) fn supply_contract(target: ContractAddress, token: Token, amount: u25
 }
 
 // TODO: Move to starkware_utils_testing.
-pub(crate) fn generic_load<T, +Store<T>, +TryInto<felt252, T>>(
+pub(crate) fn generic_load<T, +Store<T>, +Serde<T>>(
     target: ContractAddress, storage_address: felt252,
 ) -> T {
-    let value = snforge_std::load(:target, :storage_address, size: Store::<T>::size().into());
-    (*value[0]).try_into().unwrap()
+    let mut value = snforge_std::load(:target, :storage_address, size: Store::<T>::size().into())
+        .span();
+    Serde::deserialize(ref value).unwrap()
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

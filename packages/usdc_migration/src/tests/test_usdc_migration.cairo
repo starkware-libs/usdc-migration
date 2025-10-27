@@ -186,6 +186,19 @@ fn test_swap_to_new() {
         expected_event_selector: @selector!("USDCMigrated"),
         expected_event_name: "USDCMigrated",
     );
+
+    // Test zero swap.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    usdc_migration_dispatcher.swap_to_new(amount: Zero::zero());
+
+    // Assert balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: user), 0);
+    assert_eq!(new_dispatcher.balance_of(account: user), amount);
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), amount);
+    assert_eq!(
+        new_dispatcher.balance_of(account: usdc_migration_contract),
+        INITIAL_CONTRACT_SUPPLY - amount,
+    );
 }
 
 #[test]
@@ -310,6 +323,16 @@ fn test_swap_to_legacy() {
         expected_event_selector: @selector!("USDCMigrated"),
         expected_event_name: "USDCMigrated",
     );
+
+    // Test zero swap.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    usdc_migration_dispatcher.swap_to_legacy(amount: Zero::zero());
+
+    // Assert balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
+    assert_eq!(new_dispatcher.balance_of(account: user), Zero::zero());
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+    assert_eq!(new_dispatcher.balance_of(account: usdc_migration_contract), amount);
 }
 
 #[test]

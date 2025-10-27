@@ -16,8 +16,11 @@ pub mod USDCMigration {
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
+    pub(crate) const XL_BATCH_SIZE: u256 = 1_000_000_000_000_u256;
     /// Fixed set of batch sizes used when bridging the legacy token to L1.
-    pub(crate) const FIXED_BATCH_SIZES: [u256; 2] = [SMALL_BATCH_SIZE, LARGE_BATCH_SIZE];
+    pub(crate) const FIXED_BATCH_SIZES: [u256; 3] = [
+        SMALL_BATCH_SIZE, LARGE_BATCH_SIZE, XL_BATCH_SIZE,
+    ];
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);

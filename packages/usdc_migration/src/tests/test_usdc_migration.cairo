@@ -17,7 +17,7 @@ use starkware_utils_testing::test_utils::{
     cheat_caller_address_once,
 };
 use usdc_migration::errors::Errors;
-use usdc_migration::events::USDCMigrationEvents::USDCMigrated;
+use usdc_migration::events::USDCMigrationEvents::TokenMigrated;
 use usdc_migration::interface::{
     IUSDCMigrationAdminDispatcher, IUSDCMigrationAdminDispatcherTrait,
     IUSDCMigrationAdminSafeDispatcher, IUSDCMigrationAdminSafeDispatcherTrait,
@@ -180,11 +180,11 @@ fn test_swap_to_new() {
     assert_number_of_events(actual: events.len(), expected: 1, message: "migrate");
     assert_expected_event_emitted(
         spied_event: events[0],
-        expected_event: USDCMigrated {
+        expected_event: TokenMigrated {
             user, from_token: legacy_token_address, to_token: new_token_address, amount,
         },
-        expected_event_selector: @selector!("USDCMigrated"),
-        expected_event_name: "USDCMigrated",
+        expected_event_selector: @selector!("TokenMigrated"),
+        expected_event_name: "TokenMigrated",
     );
 }
 
@@ -304,11 +304,11 @@ fn test_swap_to_legacy() {
     assert_number_of_events(actual: events.len(), expected: 1, message: "migrate");
     assert_expected_event_emitted(
         spied_event: events[0],
-        expected_event: USDCMigrated {
+        expected_event: TokenMigrated {
             user, from_token: new_token_address, to_token: legacy_token_address, amount,
         },
-        expected_event_selector: @selector!("USDCMigrated"),
-        expected_event_name: "USDCMigrated",
+        expected_event_selector: @selector!("TokenMigrated"),
+        expected_event_name: "TokenMigrated",
     );
 }
 

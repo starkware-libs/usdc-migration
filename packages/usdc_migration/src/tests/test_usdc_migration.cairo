@@ -30,7 +30,9 @@ use usdc_migration::tests::test_utils::constants::{
 use usdc_migration::tests::test_utils::{
     deploy_usdc_migration, generic_load, generic_test_fixture, new_user, supply_contract,
 };
-use usdc_migration::usdc_migration::USDCMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
+use usdc_migration::usdc_migration::USDCMigration::{
+    LARGE_BATCH_SIZE, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
+};
 
 #[test]
 fn test_constructor() {
@@ -81,11 +83,11 @@ fn test_set_legacy_threshold() {
     assert_eq!(new_threshold, generic_load(usdc_migration_contract, selector!("legacy_threshold")));
     assert_eq!(SMALL_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
     // Set the threshold to a new value that is greater than the current transfer unit.
-    let new_threshold = LEGACY_THRESHOLD;
+    let new_threshold = XL_BATCH_SIZE + 1;
     cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
     usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
     assert_eq!(new_threshold, generic_load(usdc_migration_contract, selector!("legacy_threshold")));
-    assert_eq!(LARGE_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
+    assert_eq!(XL_BATCH_SIZE, generic_load(usdc_migration_contract, selector!("batch_size")));
 }
 
 #[test]

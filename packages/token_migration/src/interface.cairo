@@ -15,7 +15,6 @@ pub trait ITokenMigrationAdmin<T> {
     /// Caller must be the owner.
     fn set_legacy_threshold(ref self: T, threshold: u256);
     /// Sends the entire legacy token balance to the L1 recipient.
-    /// Returns the amount of legacy tokens sent.
     /// Caller must be the owner.
     fn send_legacy_balance_to_l1(self: @T);
     /// Verifies the owner L2 address provided in the constructor is a controlled address.

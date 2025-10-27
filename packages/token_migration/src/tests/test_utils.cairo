@@ -1,13 +1,18 @@
 use constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS,
-    STARKGATE_ADDRESS,
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
+    OWNER_ADDRESS,
 };
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
-    ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait, set_balance,
+    ContractClassTrait, CustomToken, DeclareResultTrait, L1HandlerTrait, Token, TokenTrait,
+    set_balance,
 };
 use starknet::{ContractAddress, EthAddress, Store};
-use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
+use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
+use token_migration::interface::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
+use token_migration::tests::token_bridge_mock::{
+    ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
+};
 
 #[derive(Debug, Drop, Copy)]
 pub(crate) struct TokenMigrationCfg {
@@ -37,9 +42,6 @@ pub(crate) mod constants {
     pub fn L1_RECIPIENT() -> EthAddress {
         'L1_RECIPIENT'.try_into().unwrap()
     }
-    pub fn STARKGATE_ADDRESS() -> ContractAddress {
-        'STARKGATE_ADDRESS'.try_into().unwrap()
-    }
     pub fn L1_TOKEN_ADDRESS() -> EthAddress {
         'L1_TOKEN_ADDRESS'.try_into().unwrap()
     }
@@ -50,7 +52,16 @@ pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
     supply_contract(
         target: cfg.token_migration_contract, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
     );
+    verify_l1_recipient(:cfg);
     cfg
+}
+
+pub(crate) fn verify_l1_recipient(cfg: TokenMigrationCfg) {
+    let l1_handler = L1HandlerTrait::new(
+        cfg.token_migration_contract, selector!("verify_l1_recipient"),
+    );
+    let _ = l1_handler
+        .execute(from_address: cfg.l1_recipient.into(), payload: ArrayTrait::new().span());
 }
 
 pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
@@ -78,13 +89,21 @@ pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
 }
 
 pub(crate) fn deploy_token_migration() -> TokenMigrationCfg {
-    let (legacy_token, new_token) = deploy_tokens(owner: OWNER_ADDRESS());
+    // Setup tokens and token bridge mock.
+    let starkgate_address = deploy_mock_bridge();
+    let (legacy_token, new_token) = deploy_tokens(owner: starkgate_address);
+    ITokenBridgeMockDispatcher { contract_address: starkgate_address }
+        .set_bridged_token(
+            l2_token_address: legacy_token.contract_address(), l1_token_address: L1_TOKEN_ADDRESS(),
+        );
+
+    // Deploy Token migration contract.
     let mut calldata = ArrayTrait::new();
     legacy_token.contract_address().serialize(ref calldata);
     new_token.contract_address().serialize(ref calldata);
     L1_RECIPIENT().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
-    STARKGATE_ADDRESS().serialize(ref calldata);
+    starkgate_address.serialize(ref calldata);
     LEGACY_THRESHOLD.serialize(ref calldata);
     let token_migration_contract = snforge_std::declare("TokenMigration").unwrap().contract_class();
     let (token_migration_contract_address, _) = token_migration_contract.deploy(@calldata).unwrap();
@@ -95,7 +114,7 @@ pub(crate) fn deploy_token_migration() -> TokenMigrationCfg {
         new_token,
         l1_recipient: L1_RECIPIENT(),
         owner: OWNER_ADDRESS(),
-        starkgate_address: STARKGATE_ADDRESS(),
+        starkgate_address,
     }
 }
 
@@ -133,6 +152,19 @@ pub(crate) fn generic_load<T, +Store<T>, +Serde<T>>(
     let mut value = snforge_std::load(:target, :storage_address, size: Store::<T>::size().into())
         .span();
     Serde::deserialize(ref value).unwrap()
+}
+
+pub(crate) fn approve_and_swap_to_new(cfg: TokenMigrationCfg, user: ContractAddress, amount: u256) {
+    let token_migration_contract = cfg.token_migration_contract;
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let token_migration_dispatcher = ITokenMigrationDispatcher {
+        contract_address: token_migration_contract,
+    };
+    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
+    legacy_dispatcher.approve(spender: token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    token_migration_dispatcher.swap_to_new(:amount);
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

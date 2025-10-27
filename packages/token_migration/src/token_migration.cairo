@@ -143,7 +143,7 @@ pub mod TokenMigration {
                 }
             }
             // TODO: Emit event?
-        // TODO: Send to L1 here according the new threshold?
+            self.process_legacy_balance();
         }
 
         // TODO: Test

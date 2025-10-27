@@ -272,6 +272,50 @@ fn test_swap_to_new_assertions() {
 }
 
 #[test]
+fn test_send_legacy_balance_to_l1() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let amount = LEGACY_THRESHOLD - 1;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+
+    // Send zero legacy balance to l1.
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    token_migration_admin_dispatcher.send_legacy_balance_to_l1();
+
+    // Assert balances.
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), Zero::zero());
+    assert_eq!(
+        new_dispatcher.balance_of(account: token_migration_contract), INITIAL_CONTRACT_SUPPLY,
+    );
+
+    // Swap without triggering send to l1.
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
+
+    // Send balance to l1.
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    token_migration_admin_dispatcher.send_legacy_balance_to_l1();
+
+    // Assert balances.
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), Zero::zero());
+    assert_eq!(
+        new_dispatcher.balance_of(account: token_migration_contract),
+        INITIAL_CONTRACT_SUPPLY - amount,
+    );
+}
+
+#[test]
 #[feature("safe_dispatcher")]
 fn test_send_legacy_balance_to_l1_assertions() {
     let cfg = deploy_token_migration();

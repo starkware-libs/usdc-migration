@@ -145,13 +145,12 @@ pub mod TokenMigration {
         // TODO: Send to L1 here according the new threshold?
         }
 
-        // TODO: Test once _send_legacy_to_l1 is implemented.
-        fn send_legacy_balance_to_l1(self: @ContractState) {
+        fn send_legacy_balance_to_l1(ref self: ContractState) {
             self.ownable.assert_only_owner();
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(account: get_contract_address());
             if legacy_balance > 0 {
-                self._send_legacy_to_l1(amount: legacy_balance);
+                self.send_legacy_amount_to_l1(amount: legacy_balance);
             }
         }
 
@@ -202,14 +201,6 @@ pub mod TokenMigration {
                 );
         }
 
-        // TODO: Catch error in tests in every function that calls this.
-        fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
-            // TODO: implement this.
-            // TODO: Event.
-            return;
-        }
-
         /// If the contract's balance of legacy tokens exceeds the legacy_threshold
         /// legacy_token are withdrawn to L1 using StarkGate bridge, using fixed amounts.
         fn process_legacy_balance(ref self: ContractState) {
@@ -229,6 +220,7 @@ pub mod TokenMigration {
             }
         }
 
+        // TODO: Catch error in tests in every function that calls this.
         fn send_legacy_amount_to_l1(self: @ContractState, amount: u256) {
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let starkgate_dispatcher = self.starkgate_dispatcher.read();

@@ -1,6 +1,6 @@
 [package]
 name = "token_migration"
-readme = "README.md"
+readme.workspace = true
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true

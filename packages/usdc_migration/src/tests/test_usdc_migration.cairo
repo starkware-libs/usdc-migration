@@ -231,6 +231,45 @@ fn test_swap_to_new_assertions() {
 }
 
 #[test]
+fn test_send_legacy_balance_to_l1() {
+    let cfg = generic_test_fixture();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_admin_dispatcher = IUSDCMigrationAdminDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let amount = LEGACY_THRESHOLD - 1;
+    let user = new_user(legacy_token: cfg.legacy_token, id: 0, legacy_supply: amount);
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let mut spy = spy_events();
+
+    // Swap without triggering send to l1.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract, :user, :amount, token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), amount);
+
+    // Send balance to l1.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    usdc_migration_admin_dispatcher.send_legacy_balance_to_l1();
+
+    // Assert balance was cleared.
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+
+    // Assert correct event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: usdc_migration_contract).events;
+    assert_number_of_events(
+        actual: events.len(), expected: 2, message: "send legacy balance to l1",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[1],
+        expected_event: SentToL1 { amount, batch_size: amount, batch_count: 1 },
+        expected_event_selector: @selector!("SentToL1"),
+        expected_event_name: "SentToL1",
+    );
+}
+
+#[test]
 #[feature("safe_dispatcher")]
 fn test_send_legacy_balance_to_l1_assertions() {
     let cfg = deploy_usdc_migration();

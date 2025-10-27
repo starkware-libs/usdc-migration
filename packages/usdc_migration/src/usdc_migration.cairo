@@ -140,13 +140,13 @@ pub mod USDCMigration {
         // TODO: Send to L1 here according the new threshold?
         }
 
-        // TODO: Test once _send_legacy_to_l1 is implemented.
-        fn send_legacy_balance_to_l1(self: @ContractState) {
+        // TODO: Test once _send_legacy_batches_to_l1 is implemented.
+        fn send_legacy_balance_to_l1(ref self: ContractState) {
             self.ownable.assert_only_owner();
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(account: get_contract_address());
             if legacy_balance > 0 {
-                self._send_legacy_to_l1(amount: legacy_balance);
+                self._send_legacy_batches_to_l1(batch_size: legacy_balance, batch_count: 1);
             }
         }
 
@@ -183,12 +183,6 @@ pub mod USDCMigration {
                         amount,
                     },
                 );
-        }
-
-        fn _send_legacy_to_l1(self: @ContractState, amount: u256) {
-            // TODO: implement this.
-            // TODO: Event.
-            return;
         }
 
         fn send_legacy_batches_to_l1(ref self: ContractState) {

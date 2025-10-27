@@ -6,7 +6,7 @@ use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTr
 use snforge_std::{
     ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait, set_balance,
 };
-use starknet::{ContractAddress, EthAddress};
+use starknet::{ContractAddress, EthAddress, Store};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
 
 #[derive(Debug, Drop, Copy)]
@@ -119,19 +119,11 @@ pub(crate) fn supply_contract(target: ContractAddress, token: Token, amount: u25
 }
 
 // TODO: Move to starkware_utils_testing.
-pub(crate) fn load_contract_address(
+pub(crate) fn generic_load<T, +Store<T>, +TryInto<felt252, T>>(
     target: ContractAddress, storage_address: felt252,
-) -> ContractAddress {
-    let value = snforge_std::load(:target, :storage_address, size: 1);
+) -> T {
+    let value = snforge_std::load(:target, :storage_address, size: Store::<T>::size().into());
     (*value[0]).try_into().unwrap()
-}
-
-// TODO: Move to starkware_utils_testing.
-pub(crate) fn load_u256(target: ContractAddress, storage_address: felt252) -> u256 {
-    let value = snforge_std::load(:target, :storage_address, size: 2);
-    let low = (*value[0]).try_into().unwrap();
-    let high = (*value[1]).try_into().unwrap();
-    u256 { low, high }
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

@@ -136,8 +136,7 @@ pub mod USDCMigration {
                 }
                 i -= 1;
             }
-            // TODO: Emit event?
-        // TODO: Send to L1 here according the new threshold?
+            self.process_legacy_balance_for_l1();
         }
 
         // TODO: Test once _send_legacy_to_l1 is implemented.

@@ -189,6 +189,31 @@ fn test_swap_to_new() {
 }
 
 #[test]
+fn test_swap_to_new_zero() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let new_token_address = cfg.new_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+
+    // Zero swap.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    usdc_migration_dispatcher.swap_to_new(amount: Zero::zero());
+
+    // Assert balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
+    assert_eq!(new_dispatcher.balance_of(account: user), Zero::zero());
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+    assert_eq!(new_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+}
+
+#[test]
 #[feature("safe_dispatcher")]
 fn test_swap_to_new_assertions() {
     let cfg = deploy_usdc_migration();
@@ -310,6 +335,31 @@ fn test_swap_to_legacy() {
         expected_event_selector: @selector!("USDCMigrated"),
         expected_event_name: "USDCMigrated",
     );
+}
+
+#[test]
+fn test_swap_to_legacy_zero() {
+    let cfg = deploy_usdc_migration();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let new_token_address = cfg.new_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+
+    // Zero swap.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: user);
+    usdc_migration_dispatcher.swap_to_new(amount: Zero::zero());
+
+    // Assert balances are correct.
+    assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
+    assert_eq!(new_dispatcher.balance_of(account: user), Zero::zero());
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
+    assert_eq!(new_dispatcher.balance_of(account: usdc_migration_contract), Zero::zero());
 }
 
 #[test]

@@ -40,6 +40,9 @@ pub(crate) mod constants {
     pub fn STARKGATE_ADDRESS() -> ContractAddress {
         'STARKGATE_ADDRESS'.try_into().unwrap()
     }
+    pub fn L1_TOKEN_ADDRESS() -> EthAddress {
+        'L1_TOKEN_ADDRESS'.try_into().unwrap()
+    }
 }
 
 pub(crate) fn generic_test_fixture() -> USDCMigrationCfg {
@@ -50,18 +53,12 @@ pub(crate) fn generic_test_fixture() -> USDCMigrationCfg {
     cfg
 }
 
-fn deploy_tokens() -> (Token, Token) {
+pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
     let legacy_config = TokenConfig {
-        name: "Legacy-USDC",
-        symbol: "Legacy-USDC",
-        initial_supply: INITIAL_SUPPLY,
-        owner: OWNER_ADDRESS(),
+        name: "Legacy-USDC", symbol: "Legacy-USDC", initial_supply: INITIAL_SUPPLY, owner,
     };
     let new_config = TokenConfig {
-        name: "new-USDC",
-        symbol: "new-USDC",
-        initial_supply: INITIAL_SUPPLY,
-        owner: OWNER_ADDRESS(),
+        name: "new-USDC", symbol: "new-USDC", initial_supply: INITIAL_SUPPLY, owner,
     };
     let legacy_state = legacy_config.deploy();
     let new_state = new_config.deploy();
@@ -81,7 +78,7 @@ fn deploy_tokens() -> (Token, Token) {
 }
 
 pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
-    let (legacy_token, new_token) = deploy_tokens();
+    let (legacy_token, new_token) = deploy_tokens(owner: OWNER_ADDRESS());
     let mut calldata = ArrayTrait::new();
     legacy_token.contract_address().serialize(ref calldata);
     new_token.contract_address().serialize(ref calldata);
@@ -102,9 +99,20 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     }
 }
 
-pub(crate) fn new_user(cfg: USDCMigrationCfg, id: u8, legacy_supply: u256) -> ContractAddress {
+// L2 token address needs to be set after deployment.
+pub(crate) fn deploy_mock_bridge() -> ContractAddress {
+    let token_bridge_mock_contract = snforge_std::declare("TokenBridgeMock")
+        .unwrap()
+        .contract_class();
+    let (token_bridge_mock_contract_address, _) = token_bridge_mock_contract
+        .deploy(@ArrayTrait::new())
+        .unwrap();
+    token_bridge_mock_contract_address
+}
+
+pub(crate) fn new_user(legacy_token: Token, id: u8, legacy_supply: u256) -> ContractAddress {
     let user_address = _generate_user_address(:id);
-    set_balance(target: user_address, new_balance: legacy_supply, token: cfg.legacy_token);
+    set_balance(target: user_address, new_balance: legacy_supply, token: legacy_token);
     user_address
 }
 

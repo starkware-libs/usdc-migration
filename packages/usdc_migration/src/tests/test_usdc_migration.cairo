@@ -29,8 +29,8 @@ use usdc_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
 };
 use usdc_migration::tests::test_utils::{
-    approve_and_swap, deploy_mock_bridge, deploy_tokens, deploy_usdc_migration,
-    generic_test_fixture, generic_load, new_user, supply_contract,
+    approve_and_swap, deploy_mock_bridge, deploy_tokens, deploy_usdc_migration, generic_load,
+    generic_test_fixture, new_user, supply_contract,
 };
 use usdc_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
@@ -112,6 +112,35 @@ fn test_set_legacy_threshold_assertions() {
     let result = usdc_migration_admin_safe_dispatcher
         .set_legacy_threshold(threshold: invalid_threshold);
     assert_panic_with_felt_error(:result, expected_error: Errors::THRESHOLD_TOO_SMALL);
+}
+
+#[test]
+fn test_set_legacy_threshold_trigger_send_to_l1() {
+    let cfg = generic_test_fixture();
+    let usdc_migration_contract = cfg.usdc_migration_contract;
+    let usdc_migration_admin_dispatcher = IUSDCMigrationAdminDispatcher {
+        contract_address: usdc_migration_contract,
+    };
+    let amount = LEGACY_THRESHOLD - 1;
+    let user = new_user(legacy_token: cfg.legacy_token, id: 0, legacy_supply: amount);
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+
+    // Swap without triggering send to l1.
+    approve_and_swap(
+        migration_contract: usdc_migration_contract, :user, :amount, token: cfg.legacy_token,
+    );
+    assert_eq!(legacy_dispatcher.balance_of(account: usdc_migration_contract), amount);
+
+    // Set threshold to balance.
+    cheat_caller_address_once(contract_address: usdc_migration_contract, caller_address: cfg.owner);
+    usdc_migration_admin_dispatcher.set_legacy_threshold(threshold: amount);
+
+    // Assert balance was sent to l1.
+    let new_batch_size = generic_load(usdc_migration_contract, selector!("batch_size"));
+    assert_eq!(
+        legacy_dispatcher.balance_of(account: usdc_migration_contract), amount % new_batch_size,
+    );
 }
 
 #[test]

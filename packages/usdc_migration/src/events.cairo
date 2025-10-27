@@ -11,4 +11,12 @@ pub mod USDCMigrationEvents {
         pub to_token: ContractAddress,
         pub amount: u256,
     }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct SentToL1 {
+        // TODO: Add l1 recipient?
+        pub amount: u256,
+        pub batch_size: u256,
+        pub batch_count: u256,
+    }
 }

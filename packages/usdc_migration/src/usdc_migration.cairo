@@ -11,7 +11,7 @@ pub mod USDCMigration {
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
     use usdc_migration::errors::Errors;
-    use usdc_migration::events::USDCMigrationEvents::{L1RecipientVerified, USDCMigrated};
+    use usdc_migration::events::USDCMigrationEvents::{L1RecipientVerified, TokenMigrated};
     use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
@@ -52,7 +52,7 @@ pub mod USDCMigration {
     pub enum Event {
         OwnableEvent: OwnableComponent::Event,
         UpgradeableEvent: UpgradeableComponent::Event,
-        USDCMigrated: USDCMigrated,
+        TokenMigrated: TokenMigrated,
         L1RecipientVerified: L1RecipientVerified,
     }
 
@@ -182,7 +182,7 @@ pub mod USDCMigration {
 
             self
                 .emit(
-                    USDCMigrated {
+                    TokenMigrated {
                         user,
                         from_token: from_token.contract_address,
                         to_token: to_token.contract_address,

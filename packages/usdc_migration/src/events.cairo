@@ -2,7 +2,7 @@ pub mod USDCMigrationEvents {
     use starknet::{ContractAddress, EthAddress};
 
     #[derive(Drop, starknet::Event, Debug, PartialEq)]
-    pub struct USDCMigrated {
+    pub struct TokenMigrated {
         #[key]
         pub user: ContractAddress,
         #[key]

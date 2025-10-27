@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "packages/usdc_migration",
+    "packages/token_migration",
 ]
 
 

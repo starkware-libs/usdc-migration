@@ -162,7 +162,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "usdc_migration"
+name = "token_migration"
 version = "0.1.0"
 dependencies = [
  "openzeppelin",

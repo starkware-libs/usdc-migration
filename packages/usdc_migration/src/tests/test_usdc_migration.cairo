@@ -24,15 +24,18 @@ use usdc_migration::interface::{
     IUSDCMigrationDispatcher, IUSDCMigrationDispatcherTrait, IUSDCMigrationSafeDispatcher,
     IUSDCMigrationSafeDispatcherTrait,
 };
+use usdc_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use usdc_migration::tests::test_utils::constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, LEGACY_THRESHOLD,
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
 };
 use usdc_migration::tests::test_utils::{
-    deploy_usdc_migration, generic_test_fixture, load_contract_address, load_u256, new_user,
-    supply_contract,
+    deploy_token_bridge_mock, deploy_tokens, deploy_usdc_migration, generic_test_fixture,
+    load_contract_address, load_u256, new_user, supply_contract,
+};
+use usdc_migration::tests::token_bridge_mock::{
+    ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
 };
 use usdc_migration::usdc_migration::USDCMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
-
 #[test]
 fn test_constructor() {
     let cfg = deploy_usdc_migration();
@@ -149,7 +152,7 @@ fn test_upgrade_assertions() {
 fn test_swap_to_new() {
     let cfg = generic_test_fixture();
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: amount);
+    let user = new_user(legacy_token: cfg.legacy_token, id: 0, legacy_supply: amount);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
         contract_address: usdc_migration_contract,
@@ -197,7 +200,7 @@ fn test_swap_to_new() {
 fn test_swap_to_new_assertions() {
     let cfg = deploy_usdc_migration();
     let amount = INITIAL_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let user = new_user(legacy_token: cfg.legacy_token, id: 0, legacy_supply: 0);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_safe_dispatcher = IUSDCMigrationSafeDispatcher {
         contract_address: usdc_migration_contract,
@@ -272,7 +275,7 @@ fn test_verify_owner_l2_address() {
 fn test_swap_to_legacy() {
     let cfg = deploy_usdc_migration();
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let user = new_user(legacy_token: cfg.legacy_token, id: 0, legacy_supply: 0);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_dispatcher = IUSDCMigrationDispatcher {
         contract_address: usdc_migration_contract,
@@ -321,7 +324,7 @@ fn test_swap_to_legacy() {
 fn test_swap_to_legacy_assertions() {
     let cfg = deploy_usdc_migration();
     let amount = INITIAL_SUPPLY / 10;
-    let user = new_user(:cfg, id: 0, legacy_supply: 0);
+    let user = new_user(legacy_token: cfg.legacy_token, id: 0, legacy_supply: 0);
     let usdc_migration_contract = cfg.usdc_migration_contract;
     let usdc_migration_safe_dispatcher = IUSDCMigrationSafeDispatcher {
         contract_address: usdc_migration_contract,
@@ -350,4 +353,29 @@ fn test_swap_to_legacy_assertions() {
     cheat_caller_address_once(contract_address: cfg.usdc_migration_contract, caller_address: user);
     let res = usdc_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+}
+
+#[test]
+fn test_token_bridge_mock() {
+    let starkgate_address = deploy_token_bridge_mock();
+    let (legacy_token, _) = deploy_tokens(owner: starkgate_address);
+    let l2_token_address = legacy_token.contract_address();
+    ITokenBridgeMockDispatcher { contract_address: starkgate_address }
+        .set_l2_token_address(:l2_token_address);
+    let amount = 10_000_000_000_000;
+    let user = new_user(:legacy_token, id: 0, legacy_supply: amount);
+    let starkgate_dispatcher = ITokenBridgeDispatcher { contract_address: starkgate_address };
+
+    cheat_caller_address_once(contract_address: starkgate_address, caller_address: user);
+    starkgate_dispatcher
+        .initiate_token_withdraw(
+            l1_token: L1_TOKEN_ADDRESS(), l1_recipient: L1_RECIPIENT(), :amount,
+        );
+
+    assert_eq!(
+        IERC20Dispatcher { contract_address: legacy_token.contract_address() }
+            .balance_of(account: user),
+        Zero::zero(),
+    );
+    assert_eq!(starkgate_dispatcher.get_l1_token(l2_token: l2_token_address), L1_TOKEN_ADDRESS());
 }

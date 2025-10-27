@@ -90,6 +90,7 @@ pub(crate) fn deploy_usdc_migration() -> USDCMigrationCfg {
     legacy_token.contract_address().serialize(ref calldata);
     new_token.contract_address().serialize(ref calldata);
     L1_RECIPIENT().serialize(ref calldata);
+    L1_TOKEN_ADDRESS().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
     starkgate_address.serialize(ref calldata);
     LEGACY_THRESHOLD.serialize(ref calldata);
@@ -149,6 +150,17 @@ pub(crate) fn load_u256(target: ContractAddress, storage_address: felt252) -> u2
     let low = (*value[0]).try_into().unwrap();
     let high = (*value[1]).try_into().unwrap();
     u256 { low, high }
+}
+
+pub(crate) fn approve_and_swap(
+    migration_contract: ContractAddress, user: ContractAddress, amount: u256, token: Token,
+) {
+    let legacy_token_address = token.contract_address();
+    let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
+    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
+    legacy_dispatcher.approve(spender: migration_contract, :amount);
+    cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
+    IUSDCMigrationDispatcher { contract_address: migration_contract }.swap_to_new(:amount);
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

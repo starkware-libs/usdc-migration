@@ -1,11 +1,8 @@
 Basic flows
 1. User swap threshold + x legacy, then swap x new back to legacy
-2. User swap and fail (not enough balance), then contract gets more new tokens from reverse swap, swap again and succeed.
-3. end to end: swaps, send to L1, swap and fail, get money, swap and aucceed
-4. reverse swap and fail, gets money, reverse swap and succeed
-5. swap without approve fail, swap without balance fail, then approve then swap
-6. User just transfer money, then swap
-7. user swap twice
+3. end to end: swaps, send to L1, swap (and fail), get money, swap and aucceed
+4. swap/reverse swap fail (not enough money in contract), gets money from reverse swap/swap, try again and succeed
+6. User just transfer money, then swap - what do we want to test here?
 
 Send to L1
 1. A small swap triggers the threshold

@@ -11,7 +11,9 @@ pub mod TokenMigration {
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
     use token_migration::errors::Errors;
-    use token_migration::events::TokenMigrationEvents::{L1RecipientVerified, TokenMigrated};
+    use token_migration::events::TokenMigrationEvents::{
+        L1RecipientVerified, ThresholdSet, TokenMigrated,
+    };
     use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
@@ -57,6 +59,7 @@ pub mod TokenMigration {
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenMigrated: TokenMigrated,
         L1RecipientVerified: L1RecipientVerified,
+        ThresholdSet: ThresholdSet,
     }
 
     #[constructor]
@@ -122,8 +125,10 @@ pub mod TokenMigration {
             self.ownable.assert_only_owner();
             let batch_sizes = FIXED_BATCH_SIZES.span();
             assert(threshold >= *batch_sizes[0], Errors::THRESHOLD_TOO_SMALL);
+            let old_threshold = self.legacy_threshold.read();
             self.legacy_threshold.write(threshold);
             // Infer the batch size from the threshold.
+            let old_batch_size = self.batch_size.read();
             let len = batch_sizes.len();
             for i in 0..len {
                 let batch_size = *batch_sizes[len - 1 - i];
@@ -132,8 +137,16 @@ pub mod TokenMigration {
                     break;
                 }
             }
-            // TODO: Emit event?
-        // TODO: Send to L1 here according the new threshold?
+            self
+                .emit(
+                    ThresholdSet {
+                        old_threshold,
+                        new_threshold: threshold,
+                        old_batch_size,
+                        new_batch_size: self.batch_size.read(),
+                    },
+                );
+            // TODO: Send to L1 here according the new threshold?
         }
 
         // TODO: Test once _send_legacy_to_l1 is implemented.

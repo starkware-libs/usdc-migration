@@ -17,4 +17,12 @@ pub mod TokenMigrationEvents {
         #[key]
         pub l1_recipient: EthAddress,
     }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct ThresholdSet {
+        pub old_threshold: u256,
+        pub new_threshold: u256,
+        pub old_batch_size: u256,
+        pub new_batch_size: u256,
+    }
 }

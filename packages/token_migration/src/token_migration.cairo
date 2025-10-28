@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod USDCMigration {
+pub mod TokenMigration {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::interface::IUpgradeable;
@@ -10,9 +10,9 @@ pub mod USDCMigration {
     };
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
-    use usdc_migration::errors::Errors;
-    use usdc_migration::events::USDCMigrationEvents::{L1RecipientVerified, TokenMigrated};
-    use usdc_migration::interface::{IUSDCMigration, IUSDCMigrationAdmin};
+    use token_migration::errors::Errors;
+    use token_migration::events::TokenMigrationEvents::{L1RecipientVerified, TokenMigrated};
+    use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
@@ -95,7 +95,7 @@ pub mod USDCMigration {
     }
 
     #[abi(embed_v0)]
-    pub impl USDCMigrationImpl of IUSDCMigration<ContractState> { //impl logic
+    pub impl TokenMigrationImpl of ITokenMigration<ContractState> { //impl logic
         fn swap_to_new(ref self: ContractState, amount: u256) {
             self
                 ._swap(
@@ -117,7 +117,7 @@ pub mod USDCMigration {
     }
 
     #[abi(embed_v0)]
-    pub impl AdminFunctions of IUSDCMigrationAdmin<ContractState> { //impl logic
+    pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> { //impl logic
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
             let batch_sizes = FIXED_BATCH_SIZES.span();
@@ -170,7 +170,7 @@ pub mod USDCMigration {
     }
 
     #[generate_trait]
-    impl USDCMigrationInternalImpl of USDCMigrationInternalTrait {
+    impl TokenMigrationInternalImpl of TokenMigrationInternalTrait {
         fn _swap(
             ref self: ContractState,
             from_token: IERC20Dispatcher,

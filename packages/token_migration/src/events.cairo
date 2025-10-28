@@ -1,4 +1,4 @@
-pub mod USDCMigrationEvents {
+pub mod TokenMigrationEvents {
     use starknet::{ContractAddress, EthAddress};
 
     #[derive(Drop, starknet::Event, Debug, PartialEq)]

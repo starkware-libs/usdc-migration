@@ -1,5 +1,5 @@
 #[starknet::interface]
-pub trait IUSDCMigration<T> {
+pub trait ITokenMigration<T> {
     /// Exchanges (1:1) `amount` of legacy token for new token.
     /// Precondition: Sufficient allowance of legacy token.
     fn swap_to_new(ref self: T, amount: u256);
@@ -9,7 +9,7 @@ pub trait IUSDCMigration<T> {
 }
 
 #[starknet::interface]
-pub trait IUSDCMigrationAdmin<T> {
+pub trait ITokenMigrationAdmin<T> {
     /// Sets the legacy token threshold amount that triggers transferring the legacy token to the L1
     /// recipient.
     /// Caller must be the owner.

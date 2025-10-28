@@ -57,6 +57,8 @@ pub mod TokenMigration {
         batch_size: u256,
         /// Indicates if L1 recipient address was verified.
         l1_recipient_verified: bool,
+        /// Indicates if reverse swap (new -> legacy) is allowed.
+        allow_swap_to_legacy: bool,
     }
 
     #[event]
@@ -94,6 +96,7 @@ pub mod TokenMigration {
         assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
         self.legacy_threshold.write(legacy_threshold);
         self.batch_size.write(LARGE_BATCH_SIZE);
+        self.allow_swap_to_legacy.write(true);
         self.ownable.initializer(:owner);
     }
 
@@ -123,12 +126,17 @@ pub mod TokenMigration {
         }
 
         fn swap_to_legacy(ref self: ContractState, amount: u256) {
+            assert(self.allow_swap_to_legacy.read(), Errors::SWAP_DIRECTION_DISABLED);
             self
                 ._swap(
                     from_token: self.new_token_dispatcher.read(),
                     to_token: self.legacy_token_dispatcher.read(),
                     :amount,
                 );
+        }
+
+        fn is_swap_to_legacy_allowed(ref self: ContractState) -> bool {
+            self.allow_swap_to_legacy.read()
         }
     }
 
@@ -186,6 +194,11 @@ pub mod TokenMigration {
             // Infinite approval to l2 address for both legacy and new tokens.
             legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
             new_dispatcher.approve(spender: owner, amount: MAX_U256);
+        }
+
+        fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
+            self.ownable.assert_only_owner();
+            self.allow_swap_to_legacy.write(allow_swap);
         }
     }
 

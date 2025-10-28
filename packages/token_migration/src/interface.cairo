@@ -20,4 +20,7 @@ pub trait ITokenMigrationAdmin<T> {
     /// Verifies the owner L2 address provided in the constructor is a controlled address.
     /// Caller must be the owner.
     fn verify_owner(self: @T);
+    /// Enable / disable reverse swap (new tokens for legacy tokens).
+    /// Caller must be the owner.
+    fn allow_swap_to_legacy(ref self: T, allow_swap: bool);
 }

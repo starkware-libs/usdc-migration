@@ -20,5 +20,5 @@ pub trait ITokenMigrationAdmin<T> {
     fn send_legacy_balance_to_l1(self: @T);
     /// Verifies the owner L2 address provided in the constructor is a controlled address.
     /// Caller must be the owner.
-    fn verify_owner(self: @T);
+    fn verify_owner(ref self: T);
 }

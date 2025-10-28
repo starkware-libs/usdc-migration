@@ -17,7 +17,7 @@ use starkware_utils_testing::test_utils::{
     cheat_caller_address_once,
 };
 use token_migration::errors::Errors;
-use token_migration::events::TokenMigrationEvents::TokenMigrated;
+use token_migration::events::TokenMigrationEvents::{OwnerVerified, TokenMigrated};
 use token_migration::interface::{
     ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait,
     ITokenMigrationAdminSafeDispatcher, ITokenMigrationAdminSafeDispatcherTrait,
@@ -289,6 +289,7 @@ fn test_verify_owner_l2_address() {
     let result = token_migration_admin_safe_dispatcher.verify_owner();
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 
+    let mut spy = spy_events();
     cheat_caller_address_once(
         contract_address: token_migration_contract, caller_address: cfg.owner,
     );
@@ -304,6 +305,15 @@ fn test_verify_owner_l2_address() {
     );
     assert_eq!(
         new_dispatcher.allowance(owner: token_migration_contract, spender: cfg.owner), MAX_U256,
+    );
+    // Assert event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "verify_owner");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: OwnerVerified { owner: cfg.owner },
+        expected_event_selector: @selector!("OwnerVerified"),
+        expected_event_name: "OwnerVerified",
     );
 }
 

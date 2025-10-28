@@ -17,4 +17,10 @@ pub mod TokenMigrationEvents {
         #[key]
         pub l1_recipient: EthAddress,
     }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct OwnerVerified {
+        #[key]
+        pub owner: ContractAddress,
+    }
 }

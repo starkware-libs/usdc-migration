@@ -11,7 +11,9 @@ pub mod TokenMigration {
     use starkware_utils::constants::MAX_U256;
     use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
     use token_migration::errors::Errors;
-    use token_migration::events::TokenMigrationEvents::{L1RecipientVerified, TokenMigrated};
+    use token_migration::events::TokenMigrationEvents::{
+        L1RecipientVerified, OwnerVerified, TokenMigrated,
+    };
     use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
@@ -57,6 +59,7 @@ pub mod TokenMigration {
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenMigrated: TokenMigrated,
         L1RecipientVerified: L1RecipientVerified,
+        OwnerVerified: OwnerVerified,
     }
 
     #[constructor]
@@ -146,7 +149,7 @@ pub mod TokenMigration {
             }
         }
 
-        fn verify_owner(self: @ContractState) {
+        fn verify_owner(ref self: ContractState) {
             self.ownable.assert_only_owner();
             let owner = get_caller_address();
             let legacy_dispatcher = self.legacy_token_dispatcher.read();
@@ -154,6 +157,7 @@ pub mod TokenMigration {
             // Infinite approval to l2 address for both legacy and new tokens.
             legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
             new_dispatcher.approve(spender: owner, amount: MAX_U256);
+            self.emit(OwnerVerified { owner });
         }
     }
 

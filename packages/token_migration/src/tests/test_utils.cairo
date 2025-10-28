@@ -9,7 +9,10 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, EthAddress, Store};
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
-use token_migration::interface::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
+use token_migration::interface::{
+    ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait, ITokenMigrationDispatcher,
+    ITokenMigrationDispatcherTrait,
+};
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
 };
@@ -72,7 +75,7 @@ pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
         name: "New-Token", symbol: "New-Token", initial_supply: INITIAL_SUPPLY, owner,
     };
     let legacy_state = legacy_config.deploy();
-    let new_state = new_config.deploy();
+    let allow_legacy_swap = new_config.deploy();
     let legacy_token = Token::Custom(
         CustomToken {
             contract_address: legacy_state.address,
@@ -81,7 +84,7 @@ pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
     );
     let new_token = Token::Custom(
         CustomToken {
-            contract_address: new_state.address,
+            contract_address: allow_legacy_swap.address,
             balances_variable_selector: selector!("ERC20_balances"),
         },
     );
@@ -165,6 +168,14 @@ pub(crate) fn approve_and_swap_to_new(cfg: TokenMigrationCfg, user: ContractAddr
     legacy_dispatcher.approve(spender: token_migration_contract, :amount);
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     token_migration_dispatcher.swap_to_new(:amount);
+}
+
+pub(crate) fn set_allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_legacy_swap: bool) {
+    cheat_caller_address_once(
+        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
+    );
+    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
+        .set_allow_swap_to_legacy(allow_legacy_swap: allow_legacy_swap);
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

@@ -7,7 +7,10 @@ use openzeppelin::upgrades::interface::{
     IUpgradeableSafeDispatcherTrait,
 };
 use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as UpgradeableErrors;
-use snforge_std::{DeclareResultTrait, EventSpyTrait, EventsFilterTrait, TokenTrait, spy_events};
+use snforge_std::{
+    DeclareResultTrait, EventSpyTrait, EventsFilterTrait, L1HandlerTrait, TokenTrait, spy_events,
+};
+use starknet::EthAddress;
 use starkware_utils::constants::MAX_U256;
 use starkware_utils::erc20::erc20_errors::Erc20Error;
 use starkware_utils::errors::Describable;
@@ -17,7 +20,7 @@ use starkware_utils_testing::test_utils::{
     cheat_caller_address_once,
 };
 use token_migration::errors::Errors;
-use token_migration::events::TokenMigrationEvents::TokenMigrated;
+use token_migration::events::TokenMigrationEvents::{L1RecipientVerified, TokenMigrated};
 use token_migration::interface::{
     ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait,
     ITokenMigrationAdminSafeDispatcher, ITokenMigrationAdminSafeDispatcherTrait,
@@ -415,4 +418,47 @@ fn test_swap_to_legacy_assertions() {
     cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+}
+
+#[test]
+fn test_verify_l1_recipient() {
+    let cfg = deploy_token_migration();
+    let token_migration_contract = cfg.token_migration_contract;
+    let l1_recipient_verified = generic_load(
+        token_migration_contract, selector!("l1_recipient_verified"),
+    );
+    assert!(!l1_recipient_verified);
+    // Verify the L1 recipient with the wrong address.
+    let wrong_address: EthAddress = 'WRONG_ADDRESS'.try_into().unwrap();
+    let l1_handler = L1HandlerTrait::new(
+        cfg.token_migration_contract, selector!("verify_l1_recipient"),
+    );
+    let result = l1_handler
+        .execute(from_address: wrong_address.into(), payload: ArrayTrait::new().span());
+    assert!(result.is_ok());
+    let l1_recipient_verified = generic_load(
+        token_migration_contract, selector!("l1_recipient_verified"),
+    );
+    assert!(!l1_recipient_verified);
+    // Verify the L1 recipient with the correct address.
+    let mut spy = spy_events();
+    let l1_handler = L1HandlerTrait::new(
+        cfg.token_migration_contract, selector!("verify_l1_recipient"),
+    );
+    let result = l1_handler
+        .execute(from_address: cfg.l1_recipient.into(), payload: ArrayTrait::new().span());
+    assert!(result.is_ok());
+    let l1_recipient_verified = generic_load(
+        token_migration_contract, selector!("l1_recipient_verified"),
+    );
+    assert!(l1_recipient_verified);
+    // Assert event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "verify_l1_recipient");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: L1RecipientVerified { l1_recipient: cfg.l1_recipient },
+        expected_event_selector: @selector!("L1RecipientVerified"),
+        expected_event_name: "L1RecipientVerified",
+    );
 }

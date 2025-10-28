@@ -158,10 +158,8 @@ pub mod TokenMigration {
     }
 
     /// Verify the L1 recipient address is a reachable address.
-    // TODO: Test.
     #[l1_handler]
     fn verify_l1_recipient(ref self: ContractState, from_address: felt252) {
-        // TODO: If not verified here?
         let l1_recipient = self.l1_recipient.read();
         if from_address == l1_recipient.into() {
             self.l1_recipient_verified.write(true);

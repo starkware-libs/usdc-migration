@@ -194,7 +194,7 @@ fn test_swap_to_new() {
 
     // Assert event is emitted.
     let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
-    assert_number_of_events(actual: events.len(), expected: 1, message: "migrate");
+    assert_number_of_events(actual: events.len(), expected: 1, message: "swap_to_new");
     assert_expected_event_emitted(
         spied_event: events[0],
         expected_event: TokenMigrated {
@@ -345,7 +345,7 @@ fn test_swap_to_legacy() {
 
     // Assert event is emitted.
     let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
-    assert_number_of_events(actual: events.len(), expected: 1, message: "migrate");
+    assert_number_of_events(actual: events.len(), expected: 1, message: "swap_to_legacy");
     assert_expected_event_emitted(
         spied_event: events[0],
         expected_event: TokenMigrated {

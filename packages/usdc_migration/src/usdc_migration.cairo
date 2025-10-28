@@ -124,14 +124,13 @@ pub mod USDCMigration {
             assert(threshold >= *batch_sizes[0], Errors::THRESHOLD_TOO_SMALL);
             self.legacy_threshold.write(threshold);
             // Infer the batch size from the threshold.
-            let mut i = batch_sizes.len() - 1;
-            while i >= 0 {
-                let batch_size = *batch_sizes[i];
+            let len = batch_sizes.len();
+            for i in 0..len {
+                let batch_size = *batch_sizes[len - 1 - i];
                 if batch_size <= threshold {
                     self.batch_size.write(batch_size);
                     break;
                 }
-                i -= 1;
             }
             // TODO: Emit event?
         // TODO: Send to L1 here according the new threshold?

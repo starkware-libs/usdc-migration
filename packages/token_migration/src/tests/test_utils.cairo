@@ -7,7 +7,10 @@ use snforge_std::{
     ContractClassTrait, CustomToken, DeclareResultTrait, Token, TokenTrait, set_balance,
 };
 use starknet::{ContractAddress, EthAddress, Store};
-use starkware_utils_testing::test_utils::{Deployable, TokenConfig};
+use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
+use token_migration::interface::{
+    ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait,
+};
 
 #[derive(Debug, Drop, Copy)]
 pub(crate) struct TokenMigrationCfg {
@@ -125,6 +128,14 @@ pub(crate) fn generic_load<T, +Store<T>, +Serde<T>>(
     let mut value = snforge_std::load(:target, :storage_address, size: Store::<T>::size().into())
         .span();
     Serde::deserialize(ref value).unwrap()
+}
+
+pub(crate) fn set_allow_new_to_legacy_swap(cfg: TokenMigrationCfg, new_state: bool) {
+    cheat_caller_address_once(
+        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
+    );
+    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
+        .set_allow_new_to_legacy_swap(new_state: new_state);
 }
 
 /// Mock contract to declare a mock class hash for testing upgrade.

@@ -48,6 +48,8 @@ pub mod TokenMigration {
         batch_size: u256,
         /// Indicates if L1 recipient address was verified.
         l1_recipient_verified: bool,
+        /// Indicates if new tokens can be swapped for legacy tokens.
+        allow_new_to_legacy_swap: bool,
     }
 
     #[event]
@@ -78,6 +80,7 @@ pub mod TokenMigration {
         assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
         self.legacy_threshold.write(legacy_threshold);
         self.batch_size.write(LARGE_BATCH_SIZE);
+        self.allow_new_to_legacy_swap.write(true);
         self.ownable.initializer(:owner);
     }
 
@@ -107,6 +110,7 @@ pub mod TokenMigration {
         }
 
         fn swap_to_legacy(ref self: ContractState, amount: u256) {
+            assert(self.allow_new_to_legacy_swap.read(), Errors::SWAP_DIRECTION_DISABLED);
             self
                 ._swap(
                     from_token: self.new_token_dispatcher.read(),
@@ -154,6 +158,14 @@ pub mod TokenMigration {
             // Infinite approval to l2 address for both legacy and new tokens.
             legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
             new_dispatcher.approve(spender: owner, amount: MAX_U256);
+        }
+
+        fn set_allow_new_to_legacy_swap(ref self: ContractState, new_state: bool) {
+            self.ownable.assert_only_owner();
+            let current_state = self.allow_new_to_legacy_swap.read();
+            assert(current_state != new_state, Errors::SWAP_STATE_ALREADY_SET);
+            self.allow_new_to_legacy_swap.write(new_state);
+            // TODO: Emit event?
         }
     }
 

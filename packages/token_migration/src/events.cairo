@@ -14,7 +14,6 @@ pub mod TokenMigrationEvents {
 
     #[derive(Drop, starknet::Event, Debug, PartialEq)]
     pub struct L1RecipientVerified {
-        #[key]
         pub l1_recipient: EthAddress,
     }
 

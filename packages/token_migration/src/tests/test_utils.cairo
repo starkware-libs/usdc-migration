@@ -1,5 +1,5 @@
 use constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, LEGACY_THRESHOLD, OWNER_ADDRESS,
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, THRESHOLD, OWNER_ADDRESS,
     STARKGATE_ADDRESS,
 };
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -29,7 +29,7 @@ pub(crate) mod constants {
         * 10_u256.pow(6)
         * 10_u256.pow(6); // 140 * million * decimals
     // TODO: Change to the real value.
-    pub const LEGACY_THRESHOLD: u256 = LARGE_BATCH_SIZE;
+    pub const THRESHOLD: u256 = LARGE_BATCH_SIZE;
     pub const INITIAL_CONTRACT_SUPPLY: u256 = INITIAL_SUPPLY / 20;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
@@ -85,7 +85,7 @@ pub(crate) fn deploy_token_migration() -> TokenMigrationCfg {
     L1_RECIPIENT().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
     STARKGATE_ADDRESS().serialize(ref calldata);
-    LEGACY_THRESHOLD.serialize(ref calldata);
+    THRESHOLD.serialize(ref calldata);
     let token_migration_contract = snforge_std::declare("TokenMigration").unwrap().contract_class();
     let (token_migration_contract_address, _) = token_migration_contract.deploy(@calldata).unwrap();
     // Return the configuration with the deployed contract address.

@@ -31,7 +31,7 @@ use token_migration::interface::{
 };
 use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use token_migration::tests::test_utils::constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
+    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, THRESHOLD,
 };
 use token_migration::tests::test_utils::{
     deploy_mock_bridge, deploy_token_migration, deploy_tokens, generic_load, generic_test_fixture,
@@ -65,9 +65,7 @@ fn test_constructor() {
         cfg.starkgate_address,
         generic_load(token_migration_contract, selector!("starkgate_address")),
     );
-    assert_eq!(
-        LEGACY_THRESHOLD, generic_load(token_migration_contract, selector!("legacy_threshold")),
-    );
+    assert_eq!(THRESHOLD, generic_load(token_migration_contract, selector!("threshold")));
     assert_eq!(LARGE_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: token_migration_contract };
@@ -75,7 +73,7 @@ fn test_constructor() {
 }
 
 #[test]
-fn test_set_legacy_threshold() {
+fn test_set_threshold() {
     let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
@@ -83,22 +81,20 @@ fn test_set_legacy_threshold() {
     };
     // Set the threshold to a new value.
     let mut spy = spy_events();
-    let new_threshold = LEGACY_THRESHOLD * 2;
+    let new_threshold = THRESHOLD * 2;
     cheat_caller_address_once(
         contract_address: token_migration_contract, caller_address: cfg.owner,
     );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
-    assert_eq!(
-        new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
-    );
+    token_migration_admin_dispatcher.set_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, generic_load(token_migration_contract, selector!("threshold")));
     assert_eq!(LARGE_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
     // Assert event is emitted.
     let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
-    assert_number_of_events(actual: events.len(), expected: 1, message: "set_legacy_threshold");
+    assert_number_of_events(actual: events.len(), expected: 1, message: "set_threshold");
     assert_expected_event_emitted(
         spied_event: events[0],
         expected_event: ThresholdSet {
-            old_threshold: LEGACY_THRESHOLD,
+            old_threshold: THRESHOLD,
             new_threshold: new_threshold,
             old_batch_size: LARGE_BATCH_SIZE,
             new_batch_size: LARGE_BATCH_SIZE,
@@ -111,42 +107,36 @@ fn test_set_legacy_threshold() {
     cheat_caller_address_once(
         contract_address: token_migration_contract, caller_address: cfg.owner,
     );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
-    assert_eq!(
-        new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
-    );
+    token_migration_admin_dispatcher.set_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, generic_load(token_migration_contract, selector!("threshold")));
     assert_eq!(SMALL_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
     // Set the threshold to a new value that is greater than the current transfer unit.
     let new_threshold = XL_BATCH_SIZE + 1;
     cheat_caller_address_once(
         contract_address: token_migration_contract, caller_address: cfg.owner,
     );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
-    assert_eq!(
-        new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
-    );
+    token_migration_admin_dispatcher.set_threshold(threshold: new_threshold);
+    assert_eq!(new_threshold, generic_load(token_migration_contract, selector!("threshold")));
     assert_eq!(XL_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
 }
 
 #[test]
 #[feature("safe_dispatcher")]
-fn test_set_legacy_threshold_assertions() {
+fn test_set_threshold_assertions() {
     let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_admin_safe_dispatcher = ITokenMigrationAdminSafeDispatcher {
         contract_address: token_migration_contract,
     };
     // Catch the owner error.
-    let result = token_migration_admin_safe_dispatcher
-        .set_legacy_threshold(threshold: LEGACY_THRESHOLD);
+    let result = token_migration_admin_safe_dispatcher.set_threshold(threshold: THRESHOLD);
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
     // Catch the invalid threshold error.
     let invalid_threshold = 1000;
     cheat_caller_address_once(
         contract_address: token_migration_contract, caller_address: cfg.owner,
     );
-    let result = token_migration_admin_safe_dispatcher
-        .set_legacy_threshold(threshold: invalid_threshold);
+    let result = token_migration_admin_safe_dispatcher.set_threshold(threshold: invalid_threshold);
     assert_panic_with_felt_error(:result, expected_error: Errors::THRESHOLD_TOO_SMALL);
 }
 

@@ -51,7 +51,7 @@ pub mod TokenMigration {
         /// StarkGate L2 bridge, used to bridge the legacy token to L1.
         starkgate_dispatcher: ITokenBridgeDispatcher,
         /// The threshold amount of legacy token balance, that triggers sending to L1.
-        legacy_threshold: u256,
+        threshold: u256,
         /// The exact amount of legacy token sent to L1 in a single withdraw action.
         /// Must be a value from FIXED_BATCH_SIZES.
         batch_size: u256,
@@ -78,7 +78,7 @@ pub mod TokenMigration {
         l1_recipient: EthAddress,
         owner: ContractAddress,
         starkgate_address: ContractAddress,
-        legacy_threshold: u256,
+        threshold: u256,
     ) {
         let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token };
         let new_dispatcher = IERC20Dispatcher { contract_address: new_token };
@@ -92,7 +92,7 @@ pub mod TokenMigration {
         self.l1_token_address.write(l1_token_address);
         self.starkgate_dispatcher.write(starkgate_dispatcher);
         assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
-        self.legacy_threshold.write(legacy_threshold);
+        self.threshold.write(threshold);
         self.batch_size.write(LARGE_BATCH_SIZE);
         self.ownable.initializer(:owner);
     }
@@ -134,12 +134,12 @@ pub mod TokenMigration {
 
     #[abi(embed_v0)]
     pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> {
-        fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
+        fn set_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
             let batch_sizes = FIXED_BATCH_SIZES.span();
             assert(threshold >= *batch_sizes[0], Errors::THRESHOLD_TOO_SMALL);
-            let old_threshold = self.legacy_threshold.read();
-            self.legacy_threshold.write(threshold);
+            let old_threshold = self.threshold.read();
+            self.threshold.write(threshold);
             // Infer the batch size from the threshold.
             let old_batch_size = self.batch_size.read();
             let len = batch_sizes.len();

@@ -168,7 +168,13 @@ pub mod TokenMigration {
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(account: get_contract_address());
             if legacy_balance > 0 {
-                self.send_legacy_amount_to_l1(amount: legacy_balance);
+                self
+                    .send_legacy_amount_to_l1(
+                        amount: legacy_balance,
+                        starkgate_dispatcher: self.starkgate_dispatcher.read(),
+                        l1_recipient: self.l1_recipient.read(),
+                        l1_token: self.l1_token_address.read(),
+                    );
             }
         }
 
@@ -231,17 +237,26 @@ pub mod TokenMigration {
 
             let batch_size = self.batch_size.read();
             let batch_count = min(legacy_balance / batch_size, MAX_BATCH_COUNT.into());
+            let starkgate_dispatcher = self.starkgate_dispatcher.read();
+            let l1_recipient = self.l1_recipient.read();
+            let l1_token = self.l1_token_address.read();
             for _ in 0..batch_count {
-                self.send_legacy_amount_to_l1(amount: batch_size);
+                self
+                    .send_legacy_amount_to_l1(
+                        amount: batch_size, :starkgate_dispatcher, :l1_recipient, :l1_token,
+                    );
             }
         }
 
         // TODO: Catch error in tests in every function that calls this.
-        fn send_legacy_amount_to_l1(self: @ContractState, amount: u256) {
+        fn send_legacy_amount_to_l1(
+            self: @ContractState,
+            amount: u256,
+            starkgate_dispatcher: ITokenBridgeDispatcher,
+            l1_recipient: EthAddress,
+            l1_token: EthAddress,
+        ) {
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
-            let starkgate_dispatcher = self.starkgate_dispatcher.read();
-            let l1_recipient = self.l1_recipient.read();
-            let l1_token = self.l1_token_address.read();
             starkgate_dispatcher.initiate_token_withdraw(:l1_token, :l1_recipient, :amount);
         }
     }

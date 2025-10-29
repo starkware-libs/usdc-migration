@@ -17,7 +17,7 @@ use starkware_utils_testing::test_utils::{
     cheat_caller_address_once,
 };
 use token_migration::errors::Errors;
-use token_migration::events::TokenMigrationEvents::TokenMigrated;
+use token_migration::events::TokenMigrationEvents::{ThresholdSet, TokenMigrated};
 use token_migration::interface::{
     ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait,
     ITokenMigrationAdminSafeDispatcher, ITokenMigrationAdminSafeDispatcherTrait,
@@ -72,6 +72,7 @@ fn test_set_legacy_threshold() {
         contract_address: token_migration_contract,
     };
     // Set the threshold to a new value.
+    let mut spy = spy_events();
     let new_threshold = LEGACY_THRESHOLD * 2;
     cheat_caller_address_once(
         contract_address: token_migration_contract, caller_address: cfg.owner,
@@ -81,6 +82,20 @@ fn test_set_legacy_threshold() {
         new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
     );
     assert_eq!(LARGE_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
+    // Assert event is emitted.
+    let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "set_legacy_threshold");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: ThresholdSet {
+            old_threshold: LEGACY_THRESHOLD,
+            new_threshold: new_threshold,
+            old_batch_size: LARGE_BATCH_SIZE,
+            new_batch_size: LARGE_BATCH_SIZE,
+        },
+        expected_event_selector: @selector!("ThresholdSet"),
+        expected_event_name: "ThresholdSet",
+    );
     // Set the threshold to a new value that is less than the current transfer unit.
     let new_threshold = LARGE_BATCH_SIZE - 1;
     cheat_caller_address_once(

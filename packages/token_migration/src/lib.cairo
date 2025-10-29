@@ -4,6 +4,6 @@ pub mod interface;
 pub(crate) mod starkgate_interface;
 
 #[cfg(test)]
-pub mod tests;
+pub(crate) mod tests;
 pub mod token_migration;
 pub mod utils;

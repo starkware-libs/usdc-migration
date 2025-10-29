@@ -188,9 +188,9 @@ pub mod TokenMigration {
             to_token: IERC20Dispatcher,
             amount: u256,
         ) {
-            let contract_address = get_contract_address();
             let user = get_caller_address();
-            from_token.checked_transfer_from(sender: user, recipient: contract_address, :amount);
+            from_token
+                .checked_transfer_from(sender: user, recipient: get_contract_address(), :amount);
             to_token.checked_transfer(recipient: user, :amount);
 
             self

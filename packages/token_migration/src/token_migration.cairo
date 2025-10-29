@@ -95,7 +95,7 @@ pub mod TokenMigration {
     }
 
     #[abi(embed_v0)]
-    pub impl TokenMigrationImpl of ITokenMigration<ContractState> { //impl logic
+    pub impl TokenMigrationImpl of ITokenMigration<ContractState> {
         fn swap_to_new(ref self: ContractState, amount: u256) {
             self
                 ._swap(
@@ -117,7 +117,7 @@ pub mod TokenMigration {
     }
 
     #[abi(embed_v0)]
-    pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> { //impl logic
+    pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> {
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
             let batch_sizes = FIXED_BATCH_SIZES.span();

@@ -4,7 +4,8 @@ use snforge_std::TokenTrait;
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use token_migration::errors::Errors;
 use token_migration::interface::{
-    ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
+    ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait, ITokenMigrationDispatcher,
+    ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
     ITokenMigrationSafeDispatcherTrait,
 };
 use token_migration::tests::test_utils::constants::{INITIAL_CONTRACT_SUPPLY, LEGACY_THRESHOLD};
@@ -170,4 +171,33 @@ fn test_flow_user_swap_fail_then_succeed() {
     assert_eq!(new_dispatcher.balance_of(user), Zero::zero());
     assert_eq!(legacy_dispatcher.balance_of(migration_contract), Zero::zero());
     assert_eq!(new_dispatcher.balance_of(migration_contract), amount);
+}
+
+#[test]
+fn test_token_allowances() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let amount = INITIAL_CONTRACT_SUPPLY;
+    supply_contract(target: cfg.token_migration_contract, token: cfg.legacy_token, :amount);
+    let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
+    let owner = cfg.owner;
+
+    // Verify owner.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: owner);
+    ITokenMigrationAdminDispatcher { contract_address: token_migration_contract }.verify_owner();
+
+    // Withdraw all legacy and new tokens.
+    cheat_caller_address_once(
+        contract_address: legacy_token.contract_address, caller_address: owner,
+    );
+    legacy_token.transfer_from(sender: token_migration_contract, recipient: owner, :amount);
+    cheat_caller_address_once(contract_address: new_token.contract_address, caller_address: owner);
+    new_token.transfer_from(sender: token_migration_contract, recipient: owner, :amount);
+
+    // Check balances.
+    assert_eq!(legacy_token.balance_of(account: owner), amount);
+    assert_eq!(new_token.balance_of(account: owner), amount);
+    assert_eq!(legacy_token.balance_of(account: token_migration_contract), Zero::zero());
+    assert_eq!(new_token.balance_of(account: token_migration_contract), Zero::zero());
 }

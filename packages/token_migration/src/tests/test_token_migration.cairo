@@ -225,9 +225,6 @@ fn test_swap_to_new() {
     let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_dispatcher = ITokenMigrationDispatcher {
-        contract_address: token_migration_contract,
-    };
     let legacy_token_address = cfg.legacy_token.contract_address();
     let new_token_address = cfg.new_token.contract_address();
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
@@ -236,11 +233,8 @@ fn test_swap_to_new() {
     // Spy events.
     let mut spy = spy_events();
 
-    // Approve and migrate.
-    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
-    legacy_dispatcher.approve(spender: token_migration_contract, :amount);
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    token_migration_dispatcher.swap_to_new(:amount);
+    // Approve and swap.
+    approve_and_swap_to_new(:cfg, :user, :amount);
 
     // Assert user balances are correct.
     assert_eq!(legacy_dispatcher.balance_of(account: user), 0);
@@ -271,9 +265,6 @@ fn test_swap_to_new_zero() {
     let cfg = deploy_token_migration();
     verify_l1_recipient(:cfg);
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_dispatcher = ITokenMigrationDispatcher {
-        contract_address: token_migration_contract,
-    };
     let legacy_token_address = cfg.legacy_token.contract_address();
     let new_token_address = cfg.new_token.contract_address();
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
@@ -282,8 +273,7 @@ fn test_swap_to_new_zero() {
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
 
     // Zero swap.
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    token_migration_dispatcher.swap_to_new(amount: Zero::zero());
+    approve_and_swap_to_new(:cfg, :user, amount: Zero::zero());
 
     // Assert balances are correct.
     assert_eq!(legacy_dispatcher.balance_of(account: user), amount);

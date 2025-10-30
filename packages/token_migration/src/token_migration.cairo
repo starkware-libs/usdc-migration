@@ -165,6 +165,7 @@ pub mod TokenMigration {
 
         fn send_legacy_balance_to_l1(self: @ContractState) {
             self.ownable.assert_only_owner();
+            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(account: get_contract_address());
             if legacy_balance > 0 {
@@ -226,6 +227,7 @@ pub mod TokenMigration {
         /// If the contract's balance of legacy tokens exceeds the legacy_threshold
         /// legacy_token are withdrawn to L1 using StarkGate bridge, using fixed amounts.
         fn process_legacy_balance(ref self: ContractState) {
+            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_balance = self
                 .legacy_token_dispatcher
                 .read()
@@ -248,7 +250,6 @@ pub mod TokenMigration {
             }
         }
 
-        // TODO: Catch error in tests in every function that calls this.
         fn send_legacy_amount_to_l1(
             self: @ContractState,
             amount: u256,
@@ -256,7 +257,6 @@ pub mod TokenMigration {
             l1_recipient: EthAddress,
             l1_token: EthAddress,
         ) {
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             starkgate_dispatcher.initiate_token_withdraw(:l1_token, :l1_recipient, :amount);
         }
     }

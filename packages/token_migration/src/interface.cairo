@@ -1,3 +1,5 @@
+use starknet::ContractAddress;
+
 #[starknet::interface]
 pub trait ITokenMigration<T> {
     /// Exchanges (1:1) `amount` of legacy token for new token.
@@ -8,6 +10,10 @@ pub trait ITokenMigration<T> {
     fn swap_to_legacy(ref self: T, amount: u256);
     /// Returns if reverse swap (new -> legacy) is allowed.
     fn swap_to_legacy_allowed(ref self: T) -> bool;
+    /// Returns the legacy token address.
+    fn get_legacy_token(self: @T) -> ContractAddress;
+    /// Returns the new token address.
+    fn get_new_token(self: @T) -> ContractAddress;
 }
 
 #[starknet::interface]

@@ -138,6 +138,14 @@ pub mod TokenMigration {
         fn swap_to_legacy_allowed(ref self: ContractState) -> bool {
             self.allow_swap_to_legacy.read()
         }
+
+        fn get_legacy_token(self: @ContractState) -> ContractAddress {
+            self.legacy_token_dispatcher.read().contract_address
+        }
+
+        fn get_new_token(self: @ContractState) -> ContractAddress {
+            self.new_token_dispatcher.read().contract_address
+        }
     }
 
     #[abi(embed_v0)]

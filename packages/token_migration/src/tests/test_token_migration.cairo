@@ -12,12 +12,9 @@ use snforge_std::{
 };
 use starknet::EthAddress;
 use starkware_utils::constants::MAX_U256;
-use starkware_utils::erc20::erc20_errors::Erc20Error;
-use starkware_utils::errors::Describable;
 use starkware_utils_testing::event_test_utils::assert_number_of_events;
 use starkware_utils_testing::test_utils::{
-    assert_expected_event_emitted, assert_panic_with_error, assert_panic_with_felt_error,
-    cheat_caller_address_once,
+    assert_expected_event_emitted, assert_panic_with_felt_error, cheat_caller_address_once,
 };
 use token_migration::errors::Errors;
 use token_migration::events::TokenMigrationEvents::{
@@ -313,7 +310,7 @@ fn test_swap_to_new_assertions() {
     legacy_dispatcher.approve(spender: token_migration_contract, :amount);
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_new(:amount);
-    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+    assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CALLER_BALANCE);
 
     // Insufficient allowance.
     supply_contract(target: user, token: cfg.legacy_token, :amount);
@@ -321,14 +318,14 @@ fn test_swap_to_new_assertions() {
     legacy_dispatcher.approve(spender: token_migration_contract, amount: amount / 2);
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_new(:amount);
-    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_ALLOWANCE.describe());
+    assert_panic_with_felt_error(res, Errors::INSUFFICIENT_ALLOWANCE);
 
     // Insufficient contract balance.
     cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
     legacy_dispatcher.approve(spender: token_migration_contract, :amount);
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_new(:amount);
-    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+    assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CONTRACT_BALANCE);
 
     // L1 recipient not verified.
     supply_contract(target: token_migration_contract, token: cfg.new_token, :amount);
@@ -527,7 +524,7 @@ fn test_swap_to_legacy_assertions() {
     new_dispatcher.approve(spender: token_migration_contract, :amount);
     cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
-    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+    assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CALLER_BALANCE);
 
     // Insufficient allowance.
     supply_contract(target: user, token: cfg.new_token, :amount);
@@ -535,14 +532,14 @@ fn test_swap_to_legacy_assertions() {
     new_dispatcher.approve(spender: token_migration_contract, amount: amount / 2);
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
-    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_ALLOWANCE.describe());
+    assert_panic_with_felt_error(res, Errors::INSUFFICIENT_ALLOWANCE);
 
     // Insufficient contract balance.
     cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
     new_dispatcher.approve(spender: token_migration_contract, :amount);
     cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
-    assert_panic_with_error(res, Erc20Error::INSUFFICIENT_BALANCE.describe());
+    assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CONTRACT_BALANCE);
 }
 
 #[test]

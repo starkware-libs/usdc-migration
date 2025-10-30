@@ -11,7 +11,6 @@ pub mod TokenMigration {
         ClassHash, ContractAddress, EthAddress, get_caller_address, get_contract_address,
     };
     use starkware_utils::constants::MAX_U256;
-    use starkware_utils::erc20::erc20_utils::CheckedIERC20DispatcherTrait;
     use token_migration::errors::Errors;
     use token_migration::events::TokenMigrationEvents::{
         L1RecipientVerified, ThresholdSet, TokenMigrated,
@@ -222,9 +221,24 @@ pub mod TokenMigration {
             amount: u256,
         ) {
             let user = get_caller_address();
-            from_token
-                .checked_transfer_from(sender: user, recipient: get_contract_address(), :amount);
-            to_token.checked_transfer(recipient: user, :amount);
+            let contract_address = get_contract_address();
+            assert(
+                amount <= from_token.balance_of(account: user), Errors::INSUFFICIENT_CALLER_BALANCE,
+            );
+            assert(
+                amount <= from_token.allowance(owner: user, spender: contract_address),
+                Errors::INSUFFICIENT_ALLOWANCE,
+            );
+            assert(
+                amount <= to_token.balance_of(account: contract_address),
+                Errors::INSUFFICIENT_CONTRACT_BALANCE,
+            );
+
+            let success = from_token
+                .transfer_from(sender: user, recipient: contract_address, :amount);
+            assert(success, Errors::TRANSFER_FROM_CALLER_FAILED);
+            let success = to_token.transfer(recipient: user, :amount);
+            assert(success, Errors::TRANSFER_TO_CALLER_FAILED);
 
             self
                 .emit(

@@ -31,9 +31,9 @@ use token_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
 };
 use token_migration::tests::test_utils::{
-    allow_swap_to_legacy, approve_and_swap_to_new, deploy_mock_bridge, deploy_token_migration,
-    deploy_tokens, generic_load, generic_test_fixture, new_user, supply_contract,
-    verify_l1_recipient,
+    allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, deploy_mock_bridge,
+    deploy_token_migration, deploy_tokens, generic_load, generic_test_fixture, new_user,
+    supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
@@ -439,9 +439,6 @@ fn test_swap_to_legacy() {
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_dispatcher = ITokenMigrationDispatcher {
-        contract_address: token_migration_contract,
-    };
     let legacy_token_address = cfg.legacy_token.contract_address();
     let new_token_address = cfg.new_token.contract_address();
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
@@ -454,11 +451,8 @@ fn test_swap_to_legacy() {
     // Spy events.
     let mut spy = spy_events();
 
-    // Approve and migrate.
-    cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
-    new_dispatcher.approve(spender: token_migration_contract, :amount);
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    token_migration_dispatcher.swap_to_legacy(:amount);
+    // Approve and swap.
+    approve_and_swap_to_legacy(:cfg, :user, :amount);
 
     // Assert user balances are correct.
     assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
@@ -718,17 +712,14 @@ fn test_allow_swap_to_legacy() {
     // Check reverse swap is allowed by default.
     assert!(token_migration.can_swap_to_legacy());
 
-    // Supply contract and user, approve new token.
+    // Supply contract and user.
     let amount = INITIAL_CONTRACT_SUPPLY * 3 / 10;
     supply_contract(target: token_migration_contract, token: cfg.legacy_token, :amount);
     let user = new_user(id: 0, token: cfg.new_token, initial_balance: 0);
     supply_contract(target: user, token: cfg.new_token, :amount);
-    cheat_caller_address_once(contract_address: new.contract_address, caller_address: user);
-    new.approve(spender: token_migration_contract, :amount);
 
     // Swap to legacy.
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    token_migration.swap_to_legacy(amount: amount / 3);
+    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 3);
 
     // Check balances.
     assert_eq!(legacy.balance_of(account: user), amount / 3);
@@ -765,8 +756,7 @@ fn test_allow_swap_to_legacy() {
     // Set to true and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: true);
     assert!(token_migration.can_swap_to_legacy());
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    token_migration.swap_to_legacy(amount: amount / 3);
+    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 3);
 
     // Check balances.
     assert_eq!(legacy.balance_of(account: user), amount * 2 / 3);
@@ -777,8 +767,7 @@ fn test_allow_swap_to_legacy() {
     // Set to true again and swap.
     allow_swap_to_legacy(:cfg, allow_swap: true);
     assert!(token_migration.can_swap_to_legacy());
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    token_migration.swap_to_legacy(amount: amount / 3);
+    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 3);
 
     // Check balances.
     assert_eq!(legacy.balance_of(account: user), amount);

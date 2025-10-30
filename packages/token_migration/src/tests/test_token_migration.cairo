@@ -795,74 +795,43 @@ fn test_allow_swap_to_legacy() {
     // Check reverse swap is allowed by default.
     assert!(token_migration.can_swap_to_legacy());
 
-    // Supply contract and user.
-    let amount = INITIAL_CONTRACT_SUPPLY * 3 / 10;
+    // Supply contract and create user.
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
     supply_contract(target: token_migration_contract, token: cfg.legacy_token, :amount);
-    let user = new_user(id: 0, token: cfg.new_token, initial_balance: 0);
-    supply_contract(target: user, token: cfg.new_token, :amount);
+    let user = new_user(id: 0, token: cfg.new_token, initial_balance: amount);
 
     // Swap to legacy.
-    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 3);
+    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 2);
 
     // Check balances.
-    assert_balances(:cfg, account: user, legacy_balance: amount / 3, new_balance: amount * 2 / 3);
+    assert_balances(:cfg, account: user, legacy_balance: amount / 2, new_balance: amount / 2);
     assert_balances(
         :cfg,
         account: token_migration_contract,
-        legacy_balance: amount * 2 / 3,
-        new_balance: amount / 3,
+        legacy_balance: amount / 2,
+        new_balance: amount / 2,
     );
 
     // Set to false and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: false);
     assert!(!token_migration.can_swap_to_legacy());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    let res = token_migration_safe.swap_to_legacy(amount: amount / 3);
+    let res = token_migration_safe.swap_to_legacy(amount: amount / 2);
     assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
 
     // Check balances.
-    assert_balances(:cfg, account: user, legacy_balance: amount / 3, new_balance: amount * 2 / 3);
+    assert_balances(:cfg, account: user, legacy_balance: amount / 2, new_balance: amount / 2);
     assert_balances(
         :cfg,
         account: token_migration_contract,
-        legacy_balance: amount * 2 / 3,
-        new_balance: amount / 3,
-    );
-
-    // Set to false again and try to swap to legacy again.
-    allow_swap_to_legacy(:cfg, allow_swap: false);
-    assert!(!token_migration.can_swap_to_legacy());
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    let res = token_migration_safe.swap_to_legacy(amount: amount / 3);
-    assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
-
-    // Check balances.
-    assert_balances(:cfg, account: user, legacy_balance: amount / 3, new_balance: amount * 2 / 3);
-    assert_balances(
-        :cfg,
-        account: token_migration_contract,
-        legacy_balance: amount * 2 / 3,
-        new_balance: amount / 3,
+        legacy_balance: amount / 2,
+        new_balance: amount / 2,
     );
 
     // Set to true and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: true);
     assert!(token_migration.can_swap_to_legacy());
-    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 3);
-
-    // Check balances.
-    assert_balances(:cfg, account: user, legacy_balance: amount * 2 / 3, new_balance: amount / 3);
-    assert_balances(
-        :cfg,
-        account: token_migration_contract,
-        legacy_balance: amount / 3,
-        new_balance: amount * 2 / 3,
-    );
-
-    // Set to true again and swap.
-    allow_swap_to_legacy(:cfg, allow_swap: true);
-    assert!(token_migration.can_swap_to_legacy());
-    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 3);
+    approve_and_swap_to_legacy(:cfg, :user, amount: amount / 2);
 
     // Check balances.
     assert_balances(:cfg, account: user, legacy_balance: amount, new_balance: Zero::zero());

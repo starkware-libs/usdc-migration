@@ -1,6 +1,6 @@
 pub mod Errors {
-    pub const THRESHOLD_TOO_SMALL: felt252 = 'Threshold is too small';
-    pub const L1_RECIPIENT_NOT_VERIFIED: felt252 = 'L1 recipient not verified.';
-    pub const LEGACY_TOKEN_BRIDGE_MISMATCH: felt252 = 'Legacy token bridge mismatch.';
-    pub const REVERSE_SWAP_DISABLED: felt252 = 'Reverse swap disabled.';
+    pub const THRESHOLD_TOO_SMALL: felt252 = 'THRESHOLD_TOO_SMALL';
+    pub const L1_RECIPIENT_NOT_VERIFIED: felt252 = 'L1_RECIPIENT_NOT_VERIFIED';
+    pub const LEGACY_TOKEN_BRIDGE_MISMATCH: felt252 = 'LEGACY_TOKEN_BRIDGE_MISMATCH';
+    pub const REVERSE_SWAP_DISABLED: felt252 = 'REVERSE_SWAP_DISABLED';
 }

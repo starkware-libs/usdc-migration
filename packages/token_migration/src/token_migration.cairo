@@ -159,7 +159,7 @@ pub mod TokenMigration {
                         new_batch_size: self.batch_size.read(),
                     },
                 );
-            // TODO: Send to L1 here according the new threshold?
+            self.process_legacy_balance();
         }
 
         fn send_legacy_balance_to_l1(self: @ContractState) {

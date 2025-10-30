@@ -159,6 +159,7 @@ pub mod TokenMigration {
                         new_batch_size: self.batch_size.read(),
                     },
                 );
+            // Send the legacy balance to L1 according to the new threshold.
             self.process_legacy_balance();
         }
 

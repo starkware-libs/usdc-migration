@@ -34,8 +34,9 @@ use token_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
 };
 use token_migration::tests::test_utils::{
-    approve_and_swap_to_new, deploy_mock_bridge, deploy_token_migration, deploy_tokens,
-    generic_load, generic_test_fixture, new_user, supply_contract, verify_l1_recipient,
+    allow_swap_to_legacy, approve_and_swap_to_new, deploy_mock_bridge, deploy_token_migration,
+    deploy_tokens, generic_load, generic_test_fixture, new_user, supply_contract,
+    verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
@@ -69,6 +70,7 @@ fn test_constructor() {
         LEGACY_THRESHOLD, generic_load(token_migration_contract, selector!("legacy_threshold")),
     );
     assert_eq!(LARGE_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
+    assert!(generic_load(token_migration_contract, selector!("allow_swap_to_legacy")));
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: token_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
@@ -702,4 +704,102 @@ fn test_swap_send_to_l1_multiple_batches() {
 
     // Assert contract balance (send has been triggered).
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), left_over);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_allow_swap_to_legacy() {
+    let cfg = deploy_token_migration();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration = ITokenMigrationDispatcher { contract_address: token_migration_contract };
+    let token_migration_safe = ITokenMigrationSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let legacy = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
+    let new = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+
+    // Check reverse swap is allowed by default.
+    assert!(token_migration.swap_to_legacy_allowed());
+
+    // Supply contract and user, approve new token.
+    let amount = INITIAL_CONTRACT_SUPPLY * 3 / 10;
+    supply_contract(target: token_migration_contract, token: cfg.legacy_token, :amount);
+    let user = new_user(id: 0, token: cfg.new_token, initial_balance: 0);
+    supply_contract(target: user, token: cfg.new_token, :amount);
+    cheat_caller_address_once(contract_address: new.contract_address, caller_address: user);
+    new.approve(spender: token_migration_contract, :amount);
+
+    // Swap to legacy.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    token_migration.swap_to_legacy(amount: amount / 3);
+
+    // Check balances.
+    assert_eq!(legacy.balance_of(account: user), amount / 3);
+    assert_eq!(new.balance_of(account: user), amount * 2 / 3);
+    assert_eq!(legacy.balance_of(account: token_migration_contract), amount * 2 / 3);
+    assert_eq!(new.balance_of(account: token_migration_contract), amount / 3);
+
+    // Set to false and try to swap to legacy again.
+    allow_swap_to_legacy(:cfg, allow_swap: false);
+    assert!(!token_migration.swap_to_legacy_allowed());
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    let res = token_migration_safe.swap_to_legacy(amount: amount / 3);
+    assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
+
+    // Check balances.
+    assert_eq!(legacy.balance_of(account: user), amount / 3);
+    assert_eq!(new.balance_of(account: user), amount * 2 / 3);
+    assert_eq!(legacy.balance_of(account: token_migration_contract), amount * 2 / 3);
+    assert_eq!(new.balance_of(account: token_migration_contract), amount / 3);
+
+    // Set to false again and try to swap to legacy again.
+    allow_swap_to_legacy(:cfg, allow_swap: false);
+    assert!(!token_migration.swap_to_legacy_allowed());
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    let res = token_migration_safe.swap_to_legacy(amount: amount / 3);
+    assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
+
+    // Check balances.
+    assert_eq!(legacy.balance_of(account: user), amount / 3);
+    assert_eq!(new.balance_of(account: user), amount * 2 / 3);
+    assert_eq!(legacy.balance_of(account: token_migration_contract), amount * 2 / 3);
+    assert_eq!(new.balance_of(account: token_migration_contract), amount / 3);
+
+    // Set to true and try to swap to legacy again.
+    allow_swap_to_legacy(:cfg, allow_swap: true);
+    assert!(token_migration.swap_to_legacy_allowed());
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    token_migration.swap_to_legacy(amount: amount / 3);
+
+    // Check balances.
+    assert_eq!(legacy.balance_of(account: user), amount * 2 / 3);
+    assert_eq!(new.balance_of(account: user), amount / 3);
+    assert_eq!(legacy.balance_of(account: token_migration_contract), amount / 3);
+    assert_eq!(new.balance_of(account: token_migration_contract), amount * 2 / 3);
+
+    // Set to true again and swap.
+    allow_swap_to_legacy(:cfg, allow_swap: true);
+    assert!(token_migration.swap_to_legacy_allowed());
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    token_migration.swap_to_legacy(amount: amount / 3);
+
+    // Check balances.
+    assert_eq!(legacy.balance_of(account: user), amount);
+    assert_eq!(new.balance_of(account: user), Zero::zero());
+    assert_eq!(legacy.balance_of(account: token_migration_contract), Zero::zero());
+    assert_eq!(new.balance_of(account: token_migration_contract), amount);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_allow_swap_to_legacy_assertions() {
+    let cfg = deploy_token_migration();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration_admin_safe_dispatcher = ITokenMigrationAdminSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+
+    // Catch only owner.
+    let result = token_migration_admin_safe_dispatcher.allow_swap_to_legacy(allow_swap: true);
+    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 }

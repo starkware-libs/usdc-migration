@@ -6,6 +6,8 @@ pub trait ITokenMigration<T> {
     /// Exchanges (1:1) `amount` of new token for legacy token.
     /// Precondition: Sufficient allowance of new token.
     fn swap_to_legacy(ref self: T, amount: u256);
+    /// Returns if reverse swap (new -> legacy) is allowed.
+    fn swap_to_legacy_allowed(ref self: T) -> bool;
 }
 
 #[starknet::interface]
@@ -20,4 +22,7 @@ pub trait ITokenMigrationAdmin<T> {
     /// Verifies the owner L2 address provided in the constructor is a controlled address.
     /// Caller must be the owner.
     fn verify_owner(self: @T);
+    /// Enable / disable reverse swap (new tokens for legacy tokens).
+    /// Caller must be the owner.
+    fn allow_swap_to_legacy(ref self: T, allow_swap: bool);
 }

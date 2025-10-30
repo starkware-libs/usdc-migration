@@ -719,7 +719,7 @@ fn test_allow_swap_to_legacy() {
     let new = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
 
     // Check reverse swap is allowed by default.
-    assert!(token_migration.swap_to_legacy_allowed());
+    assert!(token_migration.can_swap_to_legacy());
 
     // Supply contract and user, approve new token.
     let amount = INITIAL_CONTRACT_SUPPLY * 3 / 10;
@@ -741,7 +741,7 @@ fn test_allow_swap_to_legacy() {
 
     // Set to false and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: false);
-    assert!(!token_migration.swap_to_legacy_allowed());
+    assert!(!token_migration.can_swap_to_legacy());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe.swap_to_legacy(amount: amount / 3);
     assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
@@ -754,7 +754,7 @@ fn test_allow_swap_to_legacy() {
 
     // Set to false again and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: false);
-    assert!(!token_migration.swap_to_legacy_allowed());
+    assert!(!token_migration.can_swap_to_legacy());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe.swap_to_legacy(amount: amount / 3);
     assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
@@ -767,7 +767,7 @@ fn test_allow_swap_to_legacy() {
 
     // Set to true and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: true);
-    assert!(token_migration.swap_to_legacy_allowed());
+    assert!(token_migration.can_swap_to_legacy());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     token_migration.swap_to_legacy(amount: amount / 3);
 
@@ -779,7 +779,7 @@ fn test_allow_swap_to_legacy() {
 
     // Set to true again and swap.
     allow_swap_to_legacy(:cfg, allow_swap: true);
-    assert!(token_migration.swap_to_legacy_allowed());
+    assert!(token_migration.can_swap_to_legacy());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     token_migration.swap_to_legacy(amount: amount / 3);
 

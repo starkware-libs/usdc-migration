@@ -3,6 +3,3 @@ Set threshold
 
 Approve to owner
 1. Withdraw all/part of legacy/new
-
-Set allow new to legacy swap
-1. Disable, check that legacy -> new still works.

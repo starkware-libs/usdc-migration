@@ -187,6 +187,34 @@ fn test_set_legacy_threshold_trigger_send_to_l1() {
 }
 
 #[test]
+fn test_set_legacy_threshold_without_triggering_send_to_l1() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let amount = LEGACY_THRESHOLD / 2;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+
+    // Swap without triggering send to l1.
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
+
+    // Set threshold a bit above the amount.
+    let new_threshold = amount + 1;
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
+
+    // Assert balance was not sent to l1.
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
+}
+
+#[test]
 fn test_upgrade() {
     let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;

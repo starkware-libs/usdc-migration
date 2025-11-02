@@ -13,8 +13,7 @@ Send to L1
 
 Set threshold
 1. send to L1 after decrease threshold
-2. not send to L1 in set threshold if not needed
-3. start with the large batch size, then change to the small batch size, check send to L1
+2. start with the large batch size, then change to the small batch size, check send to L1
 
 Approve to owner
 1. Withdraw all/part of legacy/new

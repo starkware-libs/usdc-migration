@@ -125,7 +125,7 @@ pub mod TokenMigration {
         }
 
         fn swap_to_legacy(ref self: ContractState, amount: u256) {
-            assert(self.allow_swap_to_legacy.read(), Errors::REVERSE_SWAP_DISABLED);
+            assert(self.can_swap_to_legacy(), Errors::REVERSE_SWAP_DISABLED);
             self
                 ._swap(
                     from_token: self.new_token_dispatcher.read(),
@@ -152,33 +152,33 @@ pub mod TokenMigration {
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
             let batch_sizes = FIXED_BATCH_SIZES.span();
-            assert(threshold >= *batch_sizes[0], Errors::THRESHOLD_TOO_SMALL);
             let old_threshold = self.legacy_threshold.read();
-            self.legacy_threshold.write(threshold);
-            // Infer the batch size from the threshold.
             let old_batch_size = self.batch_size.read();
+            // Infer the batch size from the threshold.
+            let mut new_batch_size = Zero::zero();
             let len = batch_sizes.len();
             for i in 0..len {
                 let batch_size = *batch_sizes[len - 1 - i];
                 if batch_size <= threshold {
-                    self.batch_size.write(batch_size);
+                    new_batch_size = batch_size;
                     break;
                 }
             }
+            assert(new_batch_size.is_non_zero(), Errors::THRESHOLD_TOO_SMALL);
+            // Update the threshold and batch size.
+            self.legacy_threshold.write(threshold);
+            self.batch_size.write(new_batch_size);
             self
                 .emit(
                     ThresholdSet {
-                        old_threshold,
-                        new_threshold: threshold,
-                        old_batch_size,
-                        new_batch_size: self.batch_size.read(),
+                        old_threshold, new_threshold: threshold, old_batch_size, new_batch_size,
                     },
                 );
             // Send the legacy balance to L1 according to the new threshold.
             self.process_legacy_balance();
         }
 
-        fn send_legacy_balance_to_l1(self: @ContractState) {
+        fn send_legacy_balance_to_l1(ref self: ContractState) {
             self.ownable.assert_only_owner();
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
@@ -194,14 +194,12 @@ pub mod TokenMigration {
             }
         }
 
-        fn verify_owner(self: @ContractState) {
+        fn verify_owner(ref self: ContractState) {
             self.ownable.assert_only_owner();
-            let owner = get_caller_address();
-            let legacy_dispatcher = self.legacy_token_dispatcher.read();
-            let new_dispatcher = self.new_token_dispatcher.read();
             // Infinite approval to l2 address for both legacy and new tokens.
-            legacy_dispatcher.approve(spender: owner, amount: MAX_U256);
-            new_dispatcher.approve(spender: owner, amount: MAX_U256);
+            let owner = get_caller_address();
+            self.legacy_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
+            self.new_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
         }
 
         fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
@@ -210,7 +208,7 @@ pub mod TokenMigration {
         }
     }
 
-    /// Verify the L1 recipient address is a reachable address.
+    /// Verify the L1 recipient address provided in the constructor is a controlled address.
     #[l1_handler]
     fn verify_l1_recipient(ref self: ContractState, from_address: felt252) {
         let l1_recipient = self.l1_recipient.read();
@@ -247,6 +245,7 @@ pub mod TokenMigration {
             assert(success, Errors::TRANSFER_FROM_CALLER_FAILED);
             let success = to_token.transfer(recipient: user, :amount);
             assert(success, Errors::TRANSFER_TO_CALLER_FAILED);
+            // TODO: Add balance checks here for both tokens to be sure the transfer was successful?
 
             self
                 .emit(
@@ -263,10 +262,8 @@ pub mod TokenMigration {
         /// legacy_token are withdrawn to L1 using StarkGate bridge, using fixed amounts.
         fn process_legacy_balance(ref self: ContractState) {
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
-            let legacy_balance = self
-                .legacy_token_dispatcher
-                .read()
-                .balance_of(account: get_contract_address());
+            let legacy_token = self.legacy_token_dispatcher.read();
+            let legacy_balance = legacy_token.balance_of(account: get_contract_address());
             let threshold = self.legacy_threshold.read();
             if legacy_balance < threshold {
                 return;

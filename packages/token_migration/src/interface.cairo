@@ -24,10 +24,10 @@ pub trait ITokenMigrationAdmin<T> {
     fn set_legacy_threshold(ref self: T, threshold: u256);
     /// Sends the entire legacy token balance to the L1 recipient.
     /// Caller must be the owner.
-    fn send_legacy_balance_to_l1(self: @T);
+    fn send_legacy_balance_to_l1(ref self: T);
     /// Verifies the owner L2 address provided in the constructor is a controlled address.
     /// Caller must be the owner.
-    fn verify_owner(self: @T);
+    fn verify_owner(ref self: T);
     /// Enable / disable reverse swap (new tokens for legacy tokens).
     /// Caller must be the owner.
     fn allow_swap_to_legacy(ref self: T, allow_swap: bool);

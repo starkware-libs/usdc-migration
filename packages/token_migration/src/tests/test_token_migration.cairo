@@ -422,7 +422,6 @@ fn test_verify_owner_l2_address() {
     );
 }
 
-// TODO: Consider refactoring swap tests to use common code.
 #[test]
 fn test_swap_to_legacy() {
     let cfg = deploy_token_migration();

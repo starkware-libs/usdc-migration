@@ -800,3 +800,14 @@ fn test_allow_swap_to_legacy_assertions() {
     let result = token_migration_admin_safe_dispatcher.allow_swap_to_legacy(allow_swap: true);
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 }
+
+#[test]
+fn test_token_getters() {
+    let cfg = deploy_token_migration();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration = ITokenMigrationDispatcher { contract_address: token_migration_contract };
+    let legacy_token_address = cfg.legacy_token.contract_address();
+    let new_token_address = cfg.new_token.contract_address();
+    assert_eq!(token_migration.get_legacy_token(), legacy_token_address);
+    assert_eq!(token_migration.get_new_token(), new_token_address);
+}

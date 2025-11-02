@@ -7,6 +7,17 @@ pub(crate) trait ITokenBridgeMock<TContractState> {
     );
 }
 
+#[derive(Drop, starknet::Event, Debug, PartialEq)]
+pub struct WithdrawInitiated {
+    #[key]
+    pub l1_token: EthAddress,
+    #[key]
+    pub l1_recipient: EthAddress,
+    #[key]
+    pub caller_address: ContractAddress,
+    pub amount: u256,
+}
+
 #[starknet::contract]
 pub mod TokenBridgeMock {
     use core::num::traits::Zero;
@@ -16,12 +27,18 @@ pub mod TokenBridgeMock {
         IMintableTokenDispatcher, IMintableTokenDispatcherTrait,
     };
     use token_migration::starkgate_interface::ITokenBridge;
-    use token_migration::tests::token_bridge_mock::ITokenBridgeMock;
+    use token_migration::tests::token_bridge_mock::{ITokenBridgeMock, WithdrawInitiated};
 
     #[storage]
     struct Storage {
         l1_token_address: EthAddress,
         l2_token_address: ContractAddress,
+    }
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    pub enum Event {
+        WithdrawInitiated: WithdrawInitiated,
     }
 
     #[constructor]
@@ -36,8 +53,10 @@ pub mod TokenBridgeMock {
             assert(bridged_token_l2.is_non_zero(), 'BRIDGED_TOKEN_NOT_SET');
             assert_eq!(l1_token, self.l1_token_address.read(), "WRONG_TOKEN");
 
+            let caller_address = get_caller_address();
             IMintableTokenDispatcher { contract_address: bridged_token_l2 }
-                .permissioned_burn(account: get_caller_address(), :amount);
+                .permissioned_burn(account: caller_address, :amount);
+            self.emit(WithdrawInitiated { l1_token, l1_recipient, caller_address, amount });
         }
 
         fn get_l1_token(self: @ContractState, l2_token: ContractAddress) -> EthAddress {

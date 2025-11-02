@@ -1,21 +1,21 @@
 Basic flows
-1. User swap threshold + x legacy, then swap x new back to legacy
-3. end to end: swaps, send to L1, swap (and fail), get money, swap and aucceed
-4. swap/reverse swap fail (not enough money in contract), gets money from reverse swap/swap, try again and succeed
-6. User just transfer money, then swap - what do we want to test here?
+1. User swap threshold + x legacy, then swap x new back to legacy - Noa
+3. end to end: swaps, send to L1, swap (and fail), get money, swap and aucceed - V
+4. swap/reverse swap fail (not enough money in contract), gets money from reverse swap/swap, try again and succeed - Noa
+6. User just transfer money, then swap - Arad
 
 Send to L1
-1. Sends all legacy to L1 (function), then swap should fail
+1. Sends all legacy to L1 (function), then swap should fail - Noa
 
 Set threshold
-1. not send to L1 in set threshold if not needed
-2. start with the large batch size, then change to the small batch size, check send to L1
+1. not send to L1 in set threshold if not needed - V
+2. start with the large batch size, swap, then change to the small batch size, swap, check send to L1 (remainder) - Arad
 
 Approve to owner
-1. Withdraw all/part of legacy/new
+1. Withdraw all/part of legacy/new - V
 
 Upgrade
-1. some swaps, send to L1, upgrade, cant swap/do anything
+1. some swaps, send to L1, upgrade, cant swap/do anything - Noa
 
 Set allow new to legacy swap
-1. Disable, check that legacy -> new still works.
+1. Disable, check that legacy -> new still works - Arad

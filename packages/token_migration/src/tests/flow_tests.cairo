@@ -2,8 +2,8 @@ use core::num::traits::Zero;
 use openzeppelin::token::erc20::interface::{
     IERC20Dispatcher, IERC20DispatcherTrait, IERC20SafeDispatcher, IERC20SafeDispatcherTrait,
 };
-use snforge_std::{EventSpyTrait, EventsFilterTrait, TokenTrait, spy_events};
-use starkware_utils_testing::event_test_utils::assert_number_of_events;
+use openzeppelin::upgrades::interface::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
+use snforge_std::{DeclareResultTrait, TokenTrait};
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use token_migration::errors::Errors;
 use token_migration::interface::{
@@ -445,4 +445,60 @@ fn swap_fail_after_send_money_from_contract() {
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let result = migration_safe_dispatcher.swap_to_new(amount: 1);
     assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_CONTRACT_BALANCE);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_upgrade_flow() {
+    let cfg = generic_test_fixture();
+
+    // Swap works.
+    let amount = 100;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount * 2);
+    approve_and_swap_to_new(:cfg, :user, :amount);
+
+    // Remember balances of the contract.
+    let token_migration_contract = cfg.token_migration_contract;
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    let new_balance = new_dispatcher.balance_of(account: token_migration_contract);
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let legacy_balance = legacy_dispatcher.balance_of(account: token_migration_contract);
+
+    // Upgrade.
+    let owner = cfg.owner;
+    let upgradeable_dispatcher = IUpgradeableDispatcher {
+        contract_address: token_migration_contract,
+    };
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: owner);
+    let new_class_hash = *snforge_std::declare("MockContract").unwrap().contract_class().class_hash;
+    upgradeable_dispatcher.upgrade(new_class_hash);
+
+    // Assert balances are the same.
+    assert_eq!(new_dispatcher.balance_of(account: token_migration_contract), new_balance);
+    assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), legacy_balance);
+
+    // Swap doesn't work.
+    let migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: user,
+    );
+    legacy_dispatcher.approve(spender: token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    let result = migration_safe_dispatcher.swap_to_new(:amount);
+    assert!(result.is_err());
+
+    // Reverse swap doesn't work.
+    let amount = legacy_balance;
+    assert!(new_dispatcher.balance_of(account: user) >= amount);
+    cheat_caller_address_once(
+        contract_address: new_dispatcher.contract_address, caller_address: user,
+    );
+    new_dispatcher.approve(spender: token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    let result = migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert!(result.is_err());
 }

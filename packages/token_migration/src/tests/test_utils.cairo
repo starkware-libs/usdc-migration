@@ -201,6 +201,14 @@ pub(crate) fn verify_owner(cfg: TokenMigrationCfg) {
         .verify_owner();
 }
 
+pub(crate) fn set_legacy_threshold(cfg: TokenMigrationCfg, threshold: u256) {
+    cheat_caller_address_once(
+        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
+    );
+    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
+        .set_legacy_threshold(:threshold);
+}
+
 /// Mock contract to declare a mock class hash for testing upgrade.
 #[starknet::contract]
 pub mod MockContract {

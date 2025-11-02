@@ -170,6 +170,21 @@ pub(crate) fn approve_and_swap_to_new(cfg: TokenMigrationCfg, user: ContractAddr
     token_migration_dispatcher.swap_to_new(:amount);
 }
 
+pub(crate) fn approve_and_swap_to_legacy(
+    cfg: TokenMigrationCfg, user: ContractAddress, amount: u256,
+) {
+    let token_migration_contract = cfg.token_migration_contract;
+    let new_token_address = cfg.new_token.contract_address();
+    let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
+    let token_migration_dispatcher = ITokenMigrationDispatcher {
+        contract_address: token_migration_contract,
+    };
+    cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
+    new_dispatcher.approve(spender: token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    token_migration_dispatcher.swap_to_legacy(:amount);
+}
+
 pub(crate) fn allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_swap: bool) {
     cheat_caller_address_once(
         contract_address: cfg.token_migration_contract, caller_address: cfg.owner,

@@ -70,7 +70,6 @@ pub mod TokenMigration {
         ThresholdSet: ThresholdSet,
     }
 
-    // TODO: Test constructor assertions.
     #[constructor]
     fn constructor(
         ref self: ContractState,

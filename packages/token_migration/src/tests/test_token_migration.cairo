@@ -8,7 +8,8 @@ use openzeppelin::upgrades::interface::{
 };
 use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as UpgradeableErrors;
 use snforge_std::{
-    DeclareResultTrait, EventSpyTrait, EventsFilterTrait, L1HandlerTrait, TokenTrait, spy_events,
+    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, L1HandlerTrait,
+    TokenTrait, spy_events,
 };
 use starknet::EthAddress;
 use starkware_utils::constants::MAX_U256;
@@ -29,6 +30,7 @@ use token_migration::interface::{
 use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use token_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
+    OWNER_ADDRESS,
 };
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, deploy_mock_bridge,
@@ -71,6 +73,48 @@ fn test_constructor() {
     // Assert owner is set correctly.
     let ownable_dispatcher = IOwnableDispatcher { contract_address: token_migration_contract };
     assert_eq!(ownable_dispatcher.owner(), cfg.owner);
+}
+
+#[test]
+fn test_constructor_assertions() {
+    let starkgate_address = deploy_mock_bridge();
+    let starkgate_dispatcher = ITokenBridgeMockDispatcher { contract_address: starkgate_address };
+    let (legacy_token, new_token) = deploy_tokens(owner: starkgate_address);
+
+    // LEGACY_TOKEN_BRIDGE_MISMATCH.
+    starkgate_dispatcher
+        .set_bridged_token(
+            l2_token_address: legacy_token.contract_address(), l1_token_address: Zero::zero(),
+        );
+    let mut calldata = ArrayTrait::new();
+    legacy_token.contract_address().serialize(ref calldata);
+    new_token.contract_address().serialize(ref calldata);
+    L1_RECIPIENT().serialize(ref calldata);
+    OWNER_ADDRESS().serialize(ref calldata);
+    starkgate_address.serialize(ref calldata);
+    LEGACY_THRESHOLD.serialize(ref calldata);
+    let token_migration_contract = snforge_std::declare("TokenMigration").unwrap().contract_class();
+    let result = token_migration_contract.deploy(@calldata);
+    assert!(result.is_err());
+    assert!(*result.unwrap_err()[0] == 'LEGACY_TOKEN_BRIDGE_MISMATCH');
+
+    // THRESHOLD_TOO_SMALL.
+    starkgate_dispatcher
+        .set_bridged_token(
+            l2_token_address: legacy_token.contract_address(), l1_token_address: L1_TOKEN_ADDRESS(),
+        );
+    let legacy_threshold = LARGE_BATCH_SIZE - 1;
+    let mut calldata = ArrayTrait::new();
+    legacy_token.contract_address().serialize(ref calldata);
+    new_token.contract_address().serialize(ref calldata);
+    L1_RECIPIENT().serialize(ref calldata);
+    OWNER_ADDRESS().serialize(ref calldata);
+    starkgate_address.serialize(ref calldata);
+    legacy_threshold.serialize(ref calldata);
+    let token_migration_contract = snforge_std::declare("TokenMigration").unwrap().contract_class();
+    let result = token_migration_contract.deploy(@calldata);
+    assert!(result.is_err());
+    assert!(*result.unwrap_err()[0] == 'THRESHOLD_TOO_SMALL');
 }
 
 #[test]

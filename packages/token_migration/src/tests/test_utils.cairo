@@ -193,6 +193,14 @@ pub(crate) fn allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_swap: bool) {
         .allow_swap_to_legacy(:allow_swap);
 }
 
+pub(crate) fn verify_owner(cfg: TokenMigrationCfg) {
+    cheat_caller_address_once(
+        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
+    );
+    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
+        .verify_owner();
+}
+
 /// Mock contract to declare a mock class hash for testing upgrade.
 #[starknet::contract]
 pub mod MockContract {

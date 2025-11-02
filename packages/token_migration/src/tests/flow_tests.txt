@@ -1,6 +1,3 @@
-Set threshold
-1. start with the large batch size, then change to the small batch size, check send to L1
-
 Approve to owner
 1. Withdraw all/part of legacy/new
 

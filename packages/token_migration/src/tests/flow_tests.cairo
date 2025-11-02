@@ -3,20 +3,27 @@ use openzeppelin::token::erc20::interface::{
     IERC20Dispatcher, IERC20DispatcherTrait, IERC20SafeDispatcher, IERC20SafeDispatcherTrait,
 };
 use openzeppelin::upgrades::interface::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
-use snforge_std::{DeclareResultTrait, TokenTrait};
-use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
+use snforge_std::{DeclareResultTrait, EventSpyTrait, EventsFilterTrait, TokenTrait, spy_events};
+use starkware_utils_testing::event_test_utils::assert_number_of_events;
+use starkware_utils_testing::test_utils::{
+    assert_expected_event_emitted, assert_panic_with_felt_error, cheat_caller_address_once,
+};
 use token_migration::errors::Errors;
 use token_migration::interface::{
     ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait, ITokenMigrationDispatcher,
     ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
     ITokenMigrationSafeDispatcherTrait,
 };
-use token_migration::tests::test_utils::constants::{INITIAL_CONTRACT_SUPPLY, LEGACY_THRESHOLD};
+use token_migration::tests::test_utils::constants::{
+    INITIAL_CONTRACT_SUPPLY, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
+};
 use token_migration::tests::test_utils::{
     approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances, deploy_token_migration,
-    generic_test_fixture, new_user, supply_contract, verify_l1_recipient, verify_owner,
+    generic_test_fixture, new_user, set_legacy_threshold, supply_contract, verify_l1_recipient,
+    verify_owner,
 };
-use token_migration::token_migration::TokenMigration::LARGE_BATCH_SIZE;
+use token_migration::tests::token_bridge_mock::WithdrawInitiated;
+use token_migration::token_migration::TokenMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
 
 #[test]
 fn test_swap_send_to_l1_multiple_sends() {
@@ -501,4 +508,98 @@ fn test_upgrade_flow() {
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let result = migration_safe_dispatcher.swap_to_legacy(:amount);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_batch_sizes() {
+    let cfg = generic_test_fixture();
+    let amount = LARGE_BATCH_SIZE * 15 + SMALL_BATCH_SIZE * 2 + 1;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let mut spy = spy_events();
+    approve_and_swap_to_new(:cfg, :user, :amount);
+
+    // Test balances.
+    let new_contract_balance = INITIAL_CONTRACT_SUPPLY - amount;
+    assert_balances(
+        :cfg,
+        account: cfg.token_migration_contract,
+        legacy_balance: SMALL_BATCH_SIZE * 2 + 1,
+        new_balance: new_contract_balance,
+    );
+
+    // Assert batches by starkgate events.
+    let events = spy.get_events().emitted_by(contract_address: cfg.starkgate_address).events;
+    assert_number_of_events(actual: events.len(), expected: 15, message: "withdraw_initiated");
+    for event in events.span() {
+        assert_expected_event_emitted(
+            spied_event: event,
+            expected_event: WithdrawInitiated {
+                l1_token: L1_TOKEN_ADDRESS(),
+                l1_recipient: cfg.l1_recipient,
+                caller_address: cfg.token_migration_contract,
+                amount: LARGE_BATCH_SIZE,
+            },
+            expected_event_selector: @selector!("WithdrawInitiated"),
+            expected_event_name: "WithdrawInitiated",
+        );
+    }
+
+    let mut spy = spy_events();
+    // Set batch size to small.
+    set_legacy_threshold(:cfg, threshold: SMALL_BATCH_SIZE);
+
+    // Test balances.
+    assert_balances(
+        :cfg,
+        account: cfg.token_migration_contract,
+        legacy_balance: 1,
+        new_balance: new_contract_balance,
+    );
+
+    // Assert batches by starkgate events.
+    let events = spy.get_events().emitted_by(contract_address: cfg.starkgate_address).events;
+    assert_number_of_events(actual: events.len(), expected: 2, message: "withdraw_initiated");
+    for event in events.span() {
+        assert_expected_event_emitted(
+            spied_event: event,
+            expected_event: WithdrawInitiated {
+                l1_token: L1_TOKEN_ADDRESS(),
+                l1_recipient: cfg.l1_recipient,
+                caller_address: cfg.token_migration_contract,
+                amount: SMALL_BATCH_SIZE,
+            },
+            expected_event_selector: @selector!("WithdrawInitiated"),
+            expected_event_name: "WithdrawInitiated",
+        );
+    }
+
+    let amount = SMALL_BATCH_SIZE + 1;
+    let user = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount);
+    let mut spy = spy_events();
+    approve_and_swap_to_new(:cfg, :user, :amount);
+
+    // Test balances.
+    assert_balances(
+        :cfg,
+        account: cfg.token_migration_contract,
+        legacy_balance: 2,
+        new_balance: new_contract_balance - amount,
+    );
+
+    // Assert batches by starkgate events.
+    let events = spy.get_events().emitted_by(contract_address: cfg.starkgate_address).events;
+    assert_number_of_events(actual: events.len(), expected: 1, message: "withdraw_initiated");
+    for event in events.span() {
+        assert_expected_event_emitted(
+            spied_event: event,
+            expected_event: WithdrawInitiated {
+                l1_token: L1_TOKEN_ADDRESS(),
+                l1_recipient: cfg.l1_recipient,
+                caller_address: cfg.token_migration_contract,
+                amount: SMALL_BATCH_SIZE,
+            },
+            expected_event_selector: @selector!("WithdrawInitiated"),
+            expected_event_name: "WithdrawInitiated",
+        );
+    }
 }

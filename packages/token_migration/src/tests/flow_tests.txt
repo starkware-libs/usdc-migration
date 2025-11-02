@@ -14,8 +14,5 @@ Set threshold
 Approve to owner
 1. Withdraw all/part of legacy/new
 
-Upgrade
-1. some swaps, send to L1, upgrade, cant swap/do anything
-
 Set allow new to legacy swap
 1. Disable, check that legacy -> new still works.

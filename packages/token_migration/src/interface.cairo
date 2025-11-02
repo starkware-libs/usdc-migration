@@ -7,7 +7,7 @@ pub trait ITokenMigration<T> {
     /// Precondition: Sufficient allowance of new token.
     fn swap_to_legacy(ref self: T, amount: u256);
     /// Returns if reverse swap (new -> legacy) is allowed.
-    fn swap_to_legacy_allowed(ref self: T) -> bool;
+    fn swap_to_legacy_allowed(self: @T) -> bool;
 }
 
 #[starknet::interface]

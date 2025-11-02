@@ -135,7 +135,7 @@ pub mod TokenMigration {
                 );
         }
 
-        fn swap_to_legacy_allowed(ref self: ContractState) -> bool {
+        fn swap_to_legacy_allowed(self: @ContractState) -> bool {
             self.allow_swap_to_legacy.read()
         }
     }

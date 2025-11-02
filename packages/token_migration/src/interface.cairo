@@ -3,7 +3,7 @@ pub trait ITokenMigration<T> {
     /// Exchanges (1:1) `amount` of legacy token for new token.
     /// Precondition: Sufficient allowance of legacy token.
     fn swap_to_new(ref self: T, amount: u256);
-    /// Exchanges (1:1) `amount` of new token for legacy token.
+    /// Exchanges (1:1) `amount` of new token for legacy token (reverse swap).
     /// Precondition: Sufficient allowance of new token.
     fn swap_to_legacy(ref self: T, amount: u256);
     /// Returns if reverse swap (new -> legacy) is allowed.

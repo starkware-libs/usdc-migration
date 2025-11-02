@@ -35,7 +35,7 @@ use token_migration::tests::test_utils::constants::{
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, deploy_mock_bridge,
     deploy_token_migration, deploy_tokens, generic_load, generic_test_fixture, new_user,
-    supply_contract, verify_l1_recipient,
+    set_legacy_threshold, supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
@@ -121,16 +121,10 @@ fn test_constructor_assertions() {
 fn test_set_legacy_threshold() {
     let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
-        contract_address: token_migration_contract,
-    };
     // Set the threshold to a new value.
     let mut spy = spy_events();
     let new_threshold = LEGACY_THRESHOLD * 2;
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    set_legacy_threshold(:cfg, threshold: new_threshold);
     assert_eq!(
         new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
     );
@@ -151,20 +145,14 @@ fn test_set_legacy_threshold() {
     );
     // Set the threshold to a new value that is less than the current transfer unit.
     let new_threshold = LARGE_BATCH_SIZE - 1;
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    set_legacy_threshold(:cfg, threshold: new_threshold);
     assert_eq!(
         new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
     );
     assert_eq!(SMALL_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
     // Set the threshold to a new value that is greater than the current transfer unit.
     let new_threshold = XL_BATCH_SIZE + 1;
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: new_threshold);
+    set_legacy_threshold(:cfg, threshold: new_threshold);
     assert_eq!(
         new_threshold, generic_load(token_migration_contract, selector!("legacy_threshold")),
     );
@@ -205,9 +193,6 @@ fn test_set_legacy_threshold_assertions() {
 fn test_set_legacy_threshold_trigger_send_to_l1() {
     let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
-        contract_address: token_migration_contract,
-    };
     let amount = LEGACY_THRESHOLD - 1;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
     let legacy_token_address = cfg.legacy_token.contract_address();
@@ -218,10 +203,7 @@ fn test_set_legacy_threshold_trigger_send_to_l1() {
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
 
     // Set threshold to balance.
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: amount);
+    set_legacy_threshold(:cfg, threshold: amount);
 
     // Assert balance was sent to l1.
     let new_batch_size = SMALL_BATCH_SIZE;
@@ -234,9 +216,6 @@ fn test_set_legacy_threshold_trigger_send_to_l1() {
 fn test_set_legacy_threshold_without_triggering_send_to_l1() {
     let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
-        contract_address: token_migration_contract,
-    };
     let amount = LARGE_BATCH_SIZE - 2;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
     let legacy_dispatcher = IERC20Dispatcher {
@@ -248,20 +227,14 @@ fn test_set_legacy_threshold_without_triggering_send_to_l1() {
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
 
     // Set threshold, not changing the batch size, without triggering send to l1.
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: LARGE_BATCH_SIZE);
+    set_legacy_threshold(:cfg, threshold: LARGE_BATCH_SIZE);
     assert_eq!(generic_load(token_migration_contract, selector!("batch_size")), LARGE_BATCH_SIZE);
 
     // Assert balance was not sent to l1.
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
 
     // Set threshold, changing the batch size, without triggering send to l1.
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    token_migration_admin_dispatcher.set_legacy_threshold(threshold: LARGE_BATCH_SIZE - 1);
+    set_legacy_threshold(:cfg, threshold: LARGE_BATCH_SIZE - 1);
     assert_eq!(generic_load(token_migration_contract, selector!("batch_size")), SMALL_BATCH_SIZE);
 
     // Assert balance was not sent to l1.

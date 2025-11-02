@@ -8,8 +8,7 @@ Send to L1
 1. Sends all legacy to L1 (function), then swap should fail
 
 Set threshold
-1. not send to L1 in set threshold if not needed
-2. start with the large batch size, then change to the small batch size, check send to L1
+1. start with the large batch size, then change to the small batch size, check send to L1
 
 Approve to owner
 1. Withdraw all/part of legacy/new

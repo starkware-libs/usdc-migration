@@ -209,6 +209,17 @@ pub(crate) fn set_legacy_threshold(cfg: TokenMigrationCfg, threshold: u256) {
         .set_legacy_threshold(:threshold);
 }
 
+pub(crate) fn assert_balances(
+    cfg: TokenMigrationCfg, account: ContractAddress, legacy_balance: u256, new_balance: u256,
+) {
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    assert_eq!(legacy_dispatcher.balance_of(:account), legacy_balance);
+    assert_eq!(new_dispatcher.balance_of(:account), new_balance);
+}
+
 /// Mock contract to declare a mock class hash for testing upgrade.
 #[starknet::contract]
 pub mod MockContract {

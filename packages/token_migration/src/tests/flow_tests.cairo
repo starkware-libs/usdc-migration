@@ -11,8 +11,8 @@ use token_migration::interface::{
 };
 use token_migration::tests::test_utils::constants::{INITIAL_CONTRACT_SUPPLY, LEGACY_THRESHOLD};
 use token_migration::tests::test_utils::{
-    approve_and_swap_to_new, deploy_token_migration, generic_test_fixture, new_user,
-    supply_contract, verify_l1_recipient, verify_owner,
+    approve_and_swap_to_legacy, approve_and_swap_to_new, deploy_token_migration,
+    generic_test_fixture, new_user, supply_contract, verify_l1_recipient, verify_owner,
 };
 
 #[test]
@@ -228,4 +228,33 @@ fn test_token_allowances() {
     assert_eq!(new_token.balance_of(account: owner), amount);
     assert_eq!(legacy_token.balance_of(account: token_migration_contract), Zero::zero());
     assert_eq!(new_token.balance_of(account: token_migration_contract), Zero::zero());
+}
+
+#[test]
+fn test_transfer_to_contract() {
+    let cfg = generic_test_fixture();
+    let amount = 100;
+    let contract = cfg.token_migration_contract;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: user,
+    );
+    legacy_dispatcher.transfer(recipient: contract, :amount);
+
+    assert_eq!(legacy_dispatcher.balance_of(account: contract), amount);
+    assert_eq!(legacy_dispatcher.balance_of(account: user), Zero::zero());
+
+    // Use this money for reverse swap.
+    supply_contract(target: user, token: cfg.new_token, :amount);
+    approve_and_swap_to_legacy(:cfg, :user, :amount);
+
+    assert_eq!(legacy_dispatcher.balance_of(account: contract), Zero::zero());
+    assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
+    assert_eq!(new_dispatcher.balance_of(account: contract), INITIAL_CONTRACT_SUPPLY + amount);
+    assert_eq!(new_dispatcher.balance_of(account: user), Zero::zero());
 }

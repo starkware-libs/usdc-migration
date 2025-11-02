@@ -6,14 +6,16 @@ use snforge_std::TokenTrait;
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use token_migration::errors::Errors;
 use token_migration::interface::{
-    ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
+    ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait, ITokenMigrationDispatcher,
+    ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
     ITokenMigrationSafeDispatcherTrait,
 };
 use token_migration::tests::test_utils::constants::{INITIAL_CONTRACT_SUPPLY, LEGACY_THRESHOLD};
 use token_migration::tests::test_utils::{
-    approve_and_swap_to_new, deploy_token_migration, generic_test_fixture, new_user,
-    supply_contract, verify_l1_recipient, verify_owner,
+    approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances, deploy_token_migration,
+    generic_test_fixture, new_user, supply_contract, verify_l1_recipient, verify_owner,
 };
+use token_migration::token_migration::TokenMigration::LARGE_BATCH_SIZE;
 
 #[test]
 fn test_swap_send_to_l1_multiple_sends() {
@@ -228,4 +230,42 @@ fn test_token_allowances() {
     assert_eq!(new_token.balance_of(account: owner), amount);
     assert_eq!(legacy_token.balance_of(account: token_migration_contract), Zero::zero());
     assert_eq!(new_token.balance_of(account: token_migration_contract), Zero::zero());
+}
+
+#[test]
+fn test_swap_to_new_and_back_to_legacy() {
+    let cfg = generic_test_fixture();
+    let amount = LARGE_BATCH_SIZE + LARGE_BATCH_SIZE / 2;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let token_migration_contract = cfg.token_migration_contract;
+    let migration_admin_dispatcher = ITokenMigrationAdminDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let owner = cfg.owner;
+
+    // Set threshold to be bigger than batch size.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: owner);
+    migration_admin_dispatcher.set_legacy_threshold(threshold: amount);
+
+    // Swap to new.
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
+    assert_balances(
+        :cfg,
+        account: token_migration_contract,
+        legacy_balance: amount - LARGE_BATCH_SIZE,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+    );
+
+    // Swap back to legacy.
+    approve_and_swap_to_legacy(:cfg, :user, amount: amount - LARGE_BATCH_SIZE);
+    assert_balances(
+        :cfg, account: user, legacy_balance: LARGE_BATCH_SIZE / 2, new_balance: LARGE_BATCH_SIZE,
+    );
+    assert_balances(
+        :cfg,
+        account: token_migration_contract,
+        legacy_balance: Zero::zero(),
+        new_balance: INITIAL_CONTRACT_SUPPLY - LARGE_BATCH_SIZE,
+    );
 }

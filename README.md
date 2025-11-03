@@ -6,7 +6,7 @@
 
 # Token Migration Contract
 
-$\color{red}\textbf{Diclaimer:}\text{ This repo is a work in progress. It is not yet tested / audited.}$
+$\color{red}\textbf{Diclaimer:}\text{ This repo is a work in progress. It is not yet audited.}$
 $\color{red}\text{Both the API and the implementation are still subject to changes.}$
 
 
@@ -25,6 +25,12 @@ $\color{red}\text{Both the API and the implementation are still subject to chang
 This contract aims to aid starknet users in migrating their USDC.e tokens into USDC without having to withdraw them on L1 themselves.
 
 ## API Reference
+### View Functions
+- `get_legacy_token() -> ContractAddress` - Get the `ContractAddress` of the legacy token.
+- `get_new_token() -> ContractAddress` - Get the `ContractAddress` of the new token.
+- `can_swap_to_legacy() -> bool` - Check if the contract currently allows exchanging new tokens for legacy tokens (reverse migration).
+
+### Migration Functions
 - `swap_to_new(amount: u256)` - Exchange legacy tokens for new ones (1:1 ratio).
   - Precondition: sufficient allowance for the legacy token.
 - `swap_to_legacy(amount: u256)` - Exchange new tokens for legacy ones (1:1 ratio).

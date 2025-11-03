@@ -80,18 +80,16 @@ pub mod TokenMigration {
         starkgate_address: ContractAddress,
         legacy_threshold: u256,
     ) {
-        let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token };
-        let new_dispatcher = IERC20Dispatcher { contract_address: new_token };
         let starkgate_dispatcher = ITokenBridgeDispatcher { contract_address: starkgate_address };
         let l1_token_address = starkgate_dispatcher.get_l1_token(l2_token: legacy_token);
         assert(l1_token_address.is_non_zero(), Errors::LEGACY_TOKEN_BRIDGE_MISMATCH);
+        assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
 
-        self.legacy_token_dispatcher.write(legacy_dispatcher);
-        self.new_token_dispatcher.write(new_dispatcher);
+        self.legacy_token_dispatcher.write(IERC20Dispatcher { contract_address: legacy_token });
+        self.new_token_dispatcher.write(IERC20Dispatcher { contract_address: new_token });
         self.l1_recipient.write(l1_recipient);
         self.l1_token_address.write(l1_token_address);
         self.starkgate_dispatcher.write(starkgate_dispatcher);
-        assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
         self.legacy_threshold.write(legacy_threshold);
         self.batch_size.write(LARGE_BATCH_SIZE);
         self.allow_swap_to_legacy.write(true);

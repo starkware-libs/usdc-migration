@@ -72,16 +72,22 @@ fn test_flow_user_swap_twice() {
     legacy_dispatcher.approve(spender: migration_contract, :amount);
     cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
     migration_dispatcher.swap_to_new(amount: amount / 2);
-    assert_eq!(legacy_dispatcher.balance_of(user), amount / 2);
-    assert_eq!(new_dispatcher.balance_of(user), amount / 2);
-    assert_eq!(legacy_dispatcher.balance_of(migration_contract), amount / 2);
-    assert_eq!(new_dispatcher.balance_of(migration_contract), INITIAL_CONTRACT_SUPPLY - amount / 2);
+    assert_balances(:cfg, account: user, legacy_balance: amount / 2, new_balance: amount / 2);
+    assert_balances(
+        :cfg,
+        account: migration_contract,
+        legacy_balance: amount / 2,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount / 2,
+    );
     cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
     migration_dispatcher.swap_to_new(amount: amount / 2);
-    assert_eq!(legacy_dispatcher.balance_of(user), Zero::zero());
-    assert_eq!(new_dispatcher.balance_of(user), amount);
-    assert_eq!(legacy_dispatcher.balance_of(migration_contract), amount);
-    assert_eq!(new_dispatcher.balance_of(migration_contract), INITIAL_CONTRACT_SUPPLY - amount);
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
+    assert_balances(
+        :cfg,
+        account: migration_contract,
+        legacy_balance: amount,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+    );
     // Swap to legacy twice.
     cheat_caller_address_once(
         contract_address: new_dispatcher.contract_address, caller_address: user,
@@ -89,16 +95,22 @@ fn test_flow_user_swap_twice() {
     new_dispatcher.approve(spender: migration_contract, :amount);
     cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
     migration_dispatcher.swap_to_legacy(amount: amount / 2);
-    assert_eq!(legacy_dispatcher.balance_of(user), amount / 2);
-    assert_eq!(new_dispatcher.balance_of(user), amount / 2);
-    assert_eq!(legacy_dispatcher.balance_of(migration_contract), amount / 2);
-    assert_eq!(new_dispatcher.balance_of(migration_contract), INITIAL_CONTRACT_SUPPLY - amount / 2);
+    assert_balances(:cfg, account: user, legacy_balance: amount / 2, new_balance: amount / 2);
+    assert_balances(
+        :cfg,
+        account: migration_contract,
+        legacy_balance: amount / 2,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount / 2,
+    );
     cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
     migration_dispatcher.swap_to_legacy(amount: amount / 2);
-    assert_eq!(legacy_dispatcher.balance_of(user), amount);
-    assert_eq!(new_dispatcher.balance_of(user), Zero::zero());
-    assert_eq!(legacy_dispatcher.balance_of(migration_contract), Zero::zero());
-    assert_eq!(new_dispatcher.balance_of(migration_contract), INITIAL_CONTRACT_SUPPLY);
+    assert_balances(:cfg, account: user, legacy_balance: amount, new_balance: Zero::zero());
+    assert_balances(
+        :cfg,
+        account: migration_contract,
+        legacy_balance: Zero::zero(),
+        new_balance: INITIAL_CONTRACT_SUPPLY,
+    );
 }
 
 // This test is failing because of a known snforge issue - state is not reverted after a failed
@@ -142,10 +154,10 @@ fn test_flow_user_swap_fail_then_succeed() {
     // Succeed.
     cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
     migration_dispatcher.swap_to_new(:amount);
-    assert_eq!(legacy_dispatcher.balance_of(user), Zero::zero());
-    assert_eq!(new_dispatcher.balance_of(user), amount);
-    assert_eq!(legacy_dispatcher.balance_of(migration_contract), amount);
-    assert_eq!(new_dispatcher.balance_of(migration_contract), Zero::zero());
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
+    assert_balances(
+        :cfg, account: migration_contract, legacy_balance: amount, new_balance: Zero::zero(),
+    );
     // Reverse swap.
     // No balance to user.
     let amount = amount + 1;
@@ -171,10 +183,10 @@ fn test_flow_user_swap_fail_then_succeed() {
     // Succeed.
     cheat_caller_address_once(contract_address: migration_contract, caller_address: user);
     migration_dispatcher.swap_to_legacy(:amount);
-    assert_eq!(legacy_dispatcher.balance_of(user), amount);
-    assert_eq!(new_dispatcher.balance_of(user), Zero::zero());
-    assert_eq!(legacy_dispatcher.balance_of(migration_contract), Zero::zero());
-    assert_eq!(new_dispatcher.balance_of(migration_contract), amount);
+    assert_balances(:cfg, account: user, legacy_balance: amount, new_balance: Zero::zero());
+    assert_balances(
+        :cfg, account: migration_contract, legacy_balance: Zero::zero(), new_balance: amount,
+    );
 }
 
 #[test]
@@ -212,10 +224,13 @@ fn test_token_allowances() {
     new_token.transfer_from(sender: token_migration_contract, recipient: owner, amount: amount / 2);
 
     // Check balances.
-    assert_eq!(legacy_token.balance_of(account: owner), amount / 2);
-    assert_eq!(new_token.balance_of(account: owner), amount / 2);
-    assert_eq!(legacy_token.balance_of(account: token_migration_contract), amount / 2);
-    assert_eq!(new_token.balance_of(account: token_migration_contract), amount / 2);
+    assert_balances(:cfg, account: owner, legacy_balance: amount / 2, new_balance: amount / 2);
+    assert_balances(
+        :cfg,
+        account: token_migration_contract,
+        legacy_balance: amount / 2,
+        new_balance: amount / 2,
+    );
 
     // Withdraw the rest.
     cheat_caller_address_once(
@@ -227,10 +242,13 @@ fn test_token_allowances() {
     new_token.transfer_from(sender: token_migration_contract, recipient: owner, amount: amount / 2);
 
     // Check balances.
-    assert_eq!(legacy_token.balance_of(account: owner), amount);
-    assert_eq!(new_token.balance_of(account: owner), amount);
-    assert_eq!(legacy_token.balance_of(account: token_migration_contract), Zero::zero());
-    assert_eq!(new_token.balance_of(account: token_migration_contract), Zero::zero());
+    assert_balances(:cfg, account: owner, legacy_balance: amount, new_balance: amount);
+    assert_balances(
+        :cfg,
+        account: token_migration_contract,
+        legacy_balance: Zero::zero(),
+        new_balance: Zero::zero(),
+    );
 }
 
 #[test]
@@ -242,7 +260,6 @@ fn test_transfer_to_contract() {
     let legacy_dispatcher = IERC20Dispatcher {
         contract_address: cfg.legacy_token.contract_address(),
     };
-    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
 
     cheat_caller_address_once(
         contract_address: legacy_dispatcher.contract_address, caller_address: user,
@@ -256,10 +273,13 @@ fn test_transfer_to_contract() {
     supply_contract(target: user, token: cfg.new_token, :amount);
     approve_and_swap_to_legacy(:cfg, :user, :amount);
 
-    assert_eq!(legacy_dispatcher.balance_of(account: contract), Zero::zero());
-    assert_eq!(legacy_dispatcher.balance_of(account: user), amount);
-    assert_eq!(new_dispatcher.balance_of(account: contract), INITIAL_CONTRACT_SUPPLY + amount);
-    assert_eq!(new_dispatcher.balance_of(account: user), Zero::zero());
+    assert_balances(
+        :cfg,
+        account: contract,
+        legacy_balance: Zero::zero(),
+        new_balance: INITIAL_CONTRACT_SUPPLY + amount,
+    );
+    assert_balances(:cfg, account: user, legacy_balance: amount, new_balance: Zero::zero());
 }
 
 #[test]
@@ -307,17 +327,19 @@ fn end_to_end_swap_send_to_l1_test() {
     let amount = INITIAL_CONTRACT_SUPPLY;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount * 2);
     let legacy = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
-    let new = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
     let token_migration_safe = ITokenMigrationSafeDispatcher {
         contract_address: cfg.token_migration_contract,
     };
 
     // Swap triggers send to L1.
     approve_and_swap_to_new(:cfg, :user, :amount);
-    assert_eq!(legacy.balance_of(account: cfg.token_migration_contract), amount % LARGE_BATCH_SIZE);
-    assert_eq!(new.balance_of(account: cfg.token_migration_contract), Zero::zero());
-    assert_eq!(legacy.balance_of(account: user), amount);
-    assert_eq!(new.balance_of(account: user), amount);
+    assert_balances(
+        :cfg,
+        account: cfg.token_migration_contract,
+        legacy_balance: amount % LARGE_BATCH_SIZE,
+        new_balance: Zero::zero(),
+    );
+    assert_balances(:cfg, account: user, legacy_balance: amount, new_balance: amount);
 
     // Swap fails.
     cheat_caller_address_once(contract_address: legacy.contract_address, caller_address: user);
@@ -331,10 +353,11 @@ fn end_to_end_swap_send_to_l1_test() {
 
     // Swap succeeds and triggers send to L1.
     approve_and_swap_to_new(:cfg, :user, :amount);
-    assert_eq!(
-        legacy.balance_of(account: cfg.token_migration_contract), (amount * 2) % LARGE_BATCH_SIZE,
+    assert_balances(
+        :cfg,
+        account: cfg.token_migration_contract,
+        legacy_balance: (amount * 2) % LARGE_BATCH_SIZE,
+        new_balance: Zero::zero(),
     );
-    assert_eq!(new.balance_of(account: cfg.token_migration_contract), Zero::zero());
-    assert_eq!(legacy.balance_of(account: user), Zero::zero());
-    assert_eq!(new.balance_of(account: user), amount * 2);
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount * 2);
 }

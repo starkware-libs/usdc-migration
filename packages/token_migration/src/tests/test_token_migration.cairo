@@ -38,7 +38,7 @@ use token_migration::tests::test_utils::{
     new_user, set_legacy_threshold, supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
-    ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait,
+    ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait, WithdrawInitiated,
 };
 use token_migration::token_migration::TokenMigration::{
     LARGE_BATCH_SIZE, MAX_BATCH_COUNT, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
@@ -202,14 +202,41 @@ fn test_set_legacy_threshold_trigger_send_to_l1() {
     approve_and_swap_to_new(:cfg, :user, :amount);
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), amount);
 
+    let mut spy = spy_events();
+
     // Set threshold to balance.
     set_legacy_threshold(:cfg, threshold: amount);
 
     // Assert balance was sent to l1.
     let new_batch_size = SMALL_BATCH_SIZE;
+    let expected_balance = amount % new_batch_size;
+    assert!(expected_balance.is_non_zero());
     assert_eq!(
         legacy_dispatcher.balance_of(account: token_migration_contract), amount % new_batch_size,
     );
+
+    // Assert batches by starkgate events.
+    let events = spy.get_events().emitted_by(contract_address: cfg.starkgate_address).events;
+    let expected_number_of_batches = amount / new_batch_size;
+    assert!(expected_number_of_batches.is_non_zero());
+    assert_number_of_events(
+        actual: events.len(),
+        expected: expected_number_of_batches.try_into().unwrap(),
+        message: "withdraw_initiated",
+    );
+    for event in events.span() {
+        assert_expected_event_emitted(
+            spied_event: event,
+            expected_event: WithdrawInitiated {
+                l1_token: L1_TOKEN_ADDRESS(),
+                l1_recipient: cfg.l1_recipient,
+                caller_address: token_migration_contract,
+                amount: new_batch_size,
+            },
+            expected_event_selector: @selector!("WithdrawInitiated"),
+            expected_event_name: "WithdrawInitiated",
+        );
+    }
 }
 
 #[test]
@@ -730,11 +757,29 @@ fn test_swap_send_to_l1_multiple_batches() {
     let legacy_token_address = cfg.legacy_token.contract_address();
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
 
+    let mut spy = spy_events();
     // Swap for 10 batches.
     approve_and_swap_to_new(:cfg, :user, :amount);
 
     // Assert contract balance (send has been triggered).
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), left_over);
+
+    // Assert batches by starkgate events.
+    let events = spy.get_events().emitted_by(contract_address: cfg.starkgate_address).events;
+    assert_number_of_events(actual: events.len(), expected: 10, message: "initiate_token_withdraw");
+    for event in events.span() {
+        assert_expected_event_emitted(
+            spied_event: event,
+            expected_event: WithdrawInitiated {
+                l1_token: L1_TOKEN_ADDRESS(),
+                l1_recipient: cfg.l1_recipient,
+                caller_address: token_migration_contract,
+                amount: LARGE_BATCH_SIZE,
+            },
+            expected_event_selector: @selector!("WithdrawInitiated"),
+            expected_event_name: "WithdrawInitiated",
+        );
+    }
 }
 
 #[test]

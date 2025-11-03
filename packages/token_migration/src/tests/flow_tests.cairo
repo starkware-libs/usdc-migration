@@ -2,8 +2,7 @@ use core::num::traits::Zero;
 use openzeppelin::token::erc20::interface::{
     IERC20Dispatcher, IERC20DispatcherTrait, IERC20SafeDispatcher, IERC20SafeDispatcherTrait,
 };
-use snforge_std::{EventSpyTrait, EventsFilterTrait, TokenTrait, spy_events};
-use starkware_utils_testing::event_test_utils::assert_number_of_events;
+use snforge_std::TokenTrait;
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use token_migration::errors::Errors;
 use token_migration::interface::{

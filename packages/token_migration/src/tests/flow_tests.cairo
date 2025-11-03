@@ -2,7 +2,8 @@ use core::num::traits::Zero;
 use openzeppelin::token::erc20::interface::{
     IERC20Dispatcher, IERC20DispatcherTrait, IERC20SafeDispatcher, IERC20SafeDispatcherTrait,
 };
-use snforge_std::TokenTrait;
+use snforge_std::{EventSpyTrait, EventsFilterTrait, TokenTrait, spy_events};
+use starkware_utils_testing::event_test_utils::assert_number_of_events;
 use starkware_utils_testing::test_utils::{assert_panic_with_felt_error, cheat_caller_address_once};
 use token_migration::errors::Errors;
 use token_migration::interface::{
@@ -297,4 +298,43 @@ fn test_swap_to_new_and_back_to_legacy() {
         legacy_balance: Zero::zero(),
         new_balance: INITIAL_CONTRACT_SUPPLY - LARGE_BATCH_SIZE,
     );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn end_to_end_swap_send_to_l1_test() {
+    let cfg = generic_test_fixture();
+    let amount = INITIAL_CONTRACT_SUPPLY;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount * 2);
+    let legacy = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
+    let new = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    let token_migration_safe = ITokenMigrationSafeDispatcher {
+        contract_address: cfg.token_migration_contract,
+    };
+
+    // Swap triggers send to L1.
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_eq!(legacy.balance_of(account: cfg.token_migration_contract), amount % LARGE_BATCH_SIZE);
+    assert_eq!(new.balance_of(account: cfg.token_migration_contract), Zero::zero());
+    assert_eq!(legacy.balance_of(account: user), amount);
+    assert_eq!(new.balance_of(account: user), amount);
+
+    // Swap fails.
+    cheat_caller_address_once(contract_address: legacy.contract_address, caller_address: user);
+    legacy.approve(spender: cfg.token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
+    let result = token_migration_safe.swap_to_new(:amount);
+    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_CONTRACT_BALANCE);
+
+    // Supply contract with new tokens.
+    supply_contract(target: cfg.token_migration_contract, token: cfg.new_token, :amount);
+
+    // Swap succeeds and triggers send to L1.
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_eq!(
+        legacy.balance_of(account: cfg.token_migration_contract), (amount * 2) % LARGE_BATCH_SIZE,
+    );
+    assert_eq!(new.balance_of(account: cfg.token_migration_contract), Zero::zero());
+    assert_eq!(legacy.balance_of(account: user), Zero::zero());
+    assert_eq!(new.balance_of(account: user), amount * 2);
 }

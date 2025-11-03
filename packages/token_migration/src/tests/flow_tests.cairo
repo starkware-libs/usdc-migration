@@ -559,3 +559,92 @@ fn test_disallow_swap_to_legacy() {
         new_balance: INITIAL_CONTRACT_SUPPLY - amount,
     );
 }
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_swap_fail_gets_money_from_reverse() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let migration_dispatcher = ITokenMigrationDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+
+    // Swap almost all contract balance, leave small remainder of legacy tokens in contract.
+    let amount = INITIAL_CONTRACT_SUPPLY - 1;
+    let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_1, :amount);
+
+    // Swap to new and fail.
+    let amount = amount % LARGE_BATCH_SIZE;
+    assert!(amount.is_non_zero());
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount);
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: user_2,
+    );
+    legacy_dispatcher.approve(spender: token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user_2);
+    let result = migration_safe_dispatcher.swap_to_new(:amount);
+    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_CONTRACT_BALANCE);
+
+    // Contract gets money from reverse swap.
+    let user_3 = new_user(id: 3, token: cfg.new_token, initial_balance: amount);
+    approve_and_swap_to_legacy(:cfg, user: user_3, :amount);
+
+    // Try again and succeed.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user_2);
+    migration_dispatcher.swap_to_new(:amount);
+
+    // Check balances.
+    assert_balances(:cfg, account: user_2, legacy_balance: Zero::zero(), new_balance: amount);
+    assert_balances(
+        :cfg, account: token_migration_contract, legacy_balance: amount, new_balance: 1,
+    );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_reverse_swap_fail_gets_money_from_swap() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let migration_dispatcher = ITokenMigrationDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+
+    // Swap to legacy and fail.
+    let amount = LARGE_BATCH_SIZE - 1;
+    let user_1 = new_user(id: 1, token: cfg.new_token, initial_balance: amount);
+    cheat_caller_address_once(
+        contract_address: new_dispatcher.contract_address, caller_address: user_1,
+    );
+    new_dispatcher.approve(spender: token_migration_contract, :amount);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user_1);
+    let result = migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_CONTRACT_BALANCE);
+
+    // Contract gets money from swap.
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_2, :amount);
+
+    // Try again and succeed.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user_1);
+    migration_dispatcher.swap_to_legacy(:amount);
+
+    // Check balances.
+    assert_balances(:cfg, account: user_1, legacy_balance: amount, new_balance: Zero::zero());
+    assert_balances(
+        :cfg,
+        account: token_migration_contract,
+        legacy_balance: Zero::zero(),
+        new_balance: INITIAL_CONTRACT_SUPPLY,
+    );
+}

@@ -681,8 +681,8 @@ fn test_batch_sizes() {
             expected_event: WithdrawInitiated {
                 l1_token: L1_TOKEN_ADDRESS(),
                 l1_recipient: cfg.l1_recipient,
-                caller_address: cfg.token_migration_contract,
                 amount: LARGE_BATCH_SIZE,
+                caller_address: cfg.token_migration_contract,
             },
             expected_event_selector: @selector!("WithdrawInitiated"),
             expected_event_name: "WithdrawInitiated",
@@ -710,8 +710,8 @@ fn test_batch_sizes() {
             expected_event: WithdrawInitiated {
                 l1_token: L1_TOKEN_ADDRESS(),
                 l1_recipient: cfg.l1_recipient,
-                caller_address: cfg.token_migration_contract,
                 amount: SMALL_BATCH_SIZE,
+                caller_address: cfg.token_migration_contract,
             },
             expected_event_selector: @selector!("WithdrawInitiated"),
             expected_event_name: "WithdrawInitiated",
@@ -740,8 +740,8 @@ fn test_batch_sizes() {
             expected_event: WithdrawInitiated {
                 l1_token: L1_TOKEN_ADDRESS(),
                 l1_recipient: cfg.l1_recipient,
-                caller_address: cfg.token_migration_contract,
                 amount: SMALL_BATCH_SIZE,
+                caller_address: cfg.token_migration_contract,
             },
             expected_event_selector: @selector!("WithdrawInitiated"),
             expected_event_name: "WithdrawInitiated",

@@ -13,9 +13,9 @@ pub struct WithdrawInitiated {
     pub l1_token: EthAddress,
     #[key]
     pub l1_recipient: EthAddress,
+    pub amount: u256,
     #[key]
     pub caller_address: ContractAddress,
-    pub amount: u256,
 }
 
 #[starknet::contract]
@@ -56,7 +56,7 @@ pub mod TokenBridgeMock {
             let caller_address = get_caller_address();
             IMintableTokenDispatcher { contract_address: bridged_token_l2 }
                 .permissioned_burn(account: caller_address, :amount);
-            self.emit(WithdrawInitiated { l1_token, l1_recipient, caller_address, amount });
+            self.emit(WithdrawInitiated { l1_token, l1_recipient, amount, caller_address });
         }
 
         fn get_l1_token(self: @ContractState, l2_token: ContractAddress) -> EthAddress {

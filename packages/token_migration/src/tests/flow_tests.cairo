@@ -204,6 +204,9 @@ fn test_token_allowances() {
     let amount = INITIAL_CONTRACT_SUPPLY;
     supply_contract(target: cfg.token_migration_contract, token: cfg.legacy_token, :amount);
     let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    let new_token_safe = IERC20SafeDispatcher {
+        contract_address: cfg.new_token.contract_address(),
+    };
     let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
     let legacy_token_safe = IERC20SafeDispatcher {
         contract_address: cfg.legacy_token.contract_address(),
@@ -215,6 +218,10 @@ fn test_token_allowances() {
         contract_address: legacy_token.contract_address, caller_address: owner,
     );
     let result = legacy_token_safe
+        .transfer_from(sender: token_migration_contract, recipient: owner, :amount);
+    assert_panic_with_felt_error(:result, expected_error: 'ERC20: insufficient allowance');
+    cheat_caller_address_once(contract_address: new_token.contract_address, caller_address: owner);
+    let result = new_token_safe
         .transfer_from(sender: token_migration_contract, recipient: owner, :amount);
     assert_panic_with_felt_error(:result, expected_error: 'ERC20: insufficient allowance');
 

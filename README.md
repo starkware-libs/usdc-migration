@@ -46,7 +46,7 @@ Reach out to the maintainer at any of the following:
 Build the contracts from the repo root:
 
 ```bash
-scarb build
+scarb --release build
 ```
 
 To run the tests, execute:

@@ -13,8 +13,9 @@ use token_migration::interface::{
 };
 use token_migration::tests::test_utils::constants::{INITIAL_CONTRACT_SUPPLY, LEGACY_THRESHOLD};
 use token_migration::tests::test_utils::{
-    approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances, deploy_token_migration,
-    generic_test_fixture, new_user, supply_contract, verify_l1_recipient, verify_owner,
+    allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
+    deploy_token_migration, generic_test_fixture, new_user, supply_contract, verify_l1_recipient,
+    verify_owner,
 };
 use token_migration::token_migration::TokenMigration::LARGE_BATCH_SIZE;
 
@@ -501,4 +502,37 @@ fn test_upgrade_flow() {
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let result = migration_safe_dispatcher.swap_to_legacy(:amount);
     assert!(result.is_err());
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_disallow_swap_to_legacy() {
+    let cfg = generic_test_fixture();
+    allow_swap_to_legacy(:cfg, allow_swap: false);
+
+    // Try to swap to legacy.
+    let amount = 100;
+    let user = new_user(id: 0, token: cfg.new_token, initial_balance: amount);
+    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    cheat_caller_address_once(
+        contract_address: new_dispatcher.contract_address, caller_address: user,
+    );
+    new_dispatcher.approve(spender: cfg.token_migration_contract, :amount);
+    let migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
+        contract_address: cfg.token_migration_contract,
+    };
+    cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
+    let result = migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert_panic_with_felt_error(:result, expected_error: Errors::REVERSE_SWAP_DISABLED);
+
+    // Swap to new.
+    supply_contract(target: user, token: cfg.legacy_token, :amount);
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount * 2);
+    assert_balances(
+        :cfg,
+        account: cfg.token_migration_contract,
+        legacy_balance: amount,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+    );
 }

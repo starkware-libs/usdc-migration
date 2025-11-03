@@ -230,8 +230,8 @@ fn test_set_legacy_threshold_trigger_send_to_l1() {
             expected_event: WithdrawInitiated {
                 l1_token: L1_TOKEN_ADDRESS(),
                 l1_recipient: cfg.l1_recipient,
-                caller_address: token_migration_contract,
                 amount: new_batch_size,
+                caller_address: token_migration_contract,
             },
             expected_event_selector: @selector!("WithdrawInitiated"),
             expected_event_name: "WithdrawInitiated",
@@ -773,8 +773,8 @@ fn test_swap_send_to_l1_multiple_batches() {
             expected_event: WithdrawInitiated {
                 l1_token: L1_TOKEN_ADDRESS(),
                 l1_recipient: cfg.l1_recipient,
-                caller_address: token_migration_contract,
                 amount: LARGE_BATCH_SIZE,
+                caller_address: token_migration_contract,
             },
             expected_event_selector: @selector!("WithdrawInitiated"),
             expected_event_name: "WithdrawInitiated",

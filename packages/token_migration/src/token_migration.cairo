@@ -22,6 +22,8 @@ pub mod TokenMigration {
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
     pub(crate) const XL_BATCH_SIZE: u256 = 1_000_000_000_000_u256;
     /// Fixed set of batch sizes used when bridging the legacy token to L1.
+    // AUDIT: const on size (3).
+    // AUDIT: test for sorting.
     pub(crate) const FIXED_BATCH_SIZES: [u256; 3] = [
         SMALL_BATCH_SIZE, LARGE_BATCH_SIZE, XL_BATCH_SIZE,
     ];
@@ -53,6 +55,7 @@ pub mod TokenMigration {
         legacy_threshold: u256,
         /// The exact amount of legacy token sent to L1 in a single withdraw action.
         /// Must be a value from FIXED_BATCH_SIZES.
+        // AUDIT: Remove from storage?
         batch_size: u256,
         /// Indicates if L1 recipient address was verified.
         l1_recipient_verified: bool,
@@ -155,7 +158,7 @@ pub mod TokenMigration {
             let mut new_batch_size = Zero::zero();
             let len = batch_sizes.len();
             for i in 0..len {
-                let batch_size = *batch_sizes[len - 1 - i];
+                let batch_size = *batch_sizes[len - (i + 1)]; // AUDIT.
                 if batch_size <= threshold {
                     new_batch_size = batch_size;
                     break;
@@ -191,6 +194,7 @@ pub mod TokenMigration {
             }
         }
 
+        // AUDIT: Ran holds new token balance, tranfer from him to user. verify l1 before. fn set.
         fn verify_owner(ref self: ContractState) {
             self.ownable.assert_only_owner();
             // Infinite approval to l2 address for both legacy and new tokens.
@@ -237,12 +241,14 @@ pub mod TokenMigration {
                 Errors::INSUFFICIENT_CONTRACT_BALANCE,
             );
 
+            // AUDIT: Remove success checks?
             let success = from_token
                 .transfer_from(sender: user, recipient: contract_address, :amount);
             assert(success, Errors::TRANSFER_FROM_CALLER_FAILED);
             let success = to_token.transfer(recipient: user, :amount);
             assert(success, Errors::TRANSFER_TO_CALLER_FAILED);
-            // TODO: Add balance checks here for both tokens to be sure the transfer was successful?
+            // AUDIT: Add balance checks here for both tokens to be sure the transfer was
+            // successful?
 
             self
                 .emit(
@@ -257,6 +263,7 @@ pub mod TokenMigration {
 
         /// If the contract's balance of legacy tokens exceeds the legacy_threshold
         /// legacy_token are withdrawn to L1 using StarkGate bridge, using fixed amounts.
+        // AUDIT: Move legacy token as param.
         fn process_legacy_balance(ref self: ContractState) {
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
@@ -271,6 +278,7 @@ pub mod TokenMigration {
             let starkgate_dispatcher = self.starkgate_dispatcher.read();
             let l1_recipient = self.l1_recipient.read();
             let l1_token = self.l1_token_address.read();
+            // AUDIT: Keep some min legacy balance in contract for reverse swap?
             for _ in 0..batch_count {
                 self
                     .send_legacy_amount_to_l1(
@@ -279,6 +287,7 @@ pub mod TokenMigration {
             }
         }
 
+        // AUDIT: Inline, comment, change params order.
         fn send_legacy_amount_to_l1(
             self: @ContractState,
             amount: u256,

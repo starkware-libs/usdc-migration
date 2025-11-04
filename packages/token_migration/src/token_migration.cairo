@@ -225,22 +225,28 @@ pub mod TokenMigration {
         ) {
             let user = get_caller_address();
             let contract_address = get_contract_address();
+            let to_token_balance_before = to_token.balance_of(contract_address);
+            let from_token_balance_before = from_token.balance_of(contract_address);
             assert(amount <= from_token.balance_of(user), Errors::INSUFFICIENT_CALLER_BALANCE);
             assert(
                 amount <= from_token.allowance(owner: user, spender: contract_address),
                 Errors::INSUFFICIENT_ALLOWANCE,
             );
-            assert(
-                amount <= to_token.balance_of(contract_address),
-                Errors::INSUFFICIENT_CONTRACT_BALANCE,
-            );
+            assert(amount <= to_token_balance_before, Errors::INSUFFICIENT_CONTRACT_BALANCE);
 
             let success = from_token
                 .transfer_from(sender: user, recipient: contract_address, :amount);
             assert(success, Errors::TRANSFER_FROM_CALLER_FAILED);
             let success = to_token.transfer(recipient: user, :amount);
             assert(success, Errors::TRANSFER_TO_CALLER_FAILED);
-            // TODO: Add balance checks here for both tokens to be sure the transfer was successful?
+            let from_token_balance_after = from_token.balance_of(contract_address);
+            let to_token_balance_after = to_token.balance_of(contract_address);
+            assert(
+                from_token_balance_after
+                    - from_token_balance_before == amount && to_token_balance_before
+                    - to_token_balance_after == amount,
+                Errors::UNEXPECTED_BALANCE,
+            );
 
             self
                 .emit(

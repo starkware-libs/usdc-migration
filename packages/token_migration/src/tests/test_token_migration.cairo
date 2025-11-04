@@ -41,7 +41,7 @@ use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait, WithdrawInitiated,
 };
 use token_migration::token_migration::TokenMigration::{
-    LARGE_BATCH_SIZE, MAX_BATCH_COUNT, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
+    FIXED_BATCH_SIZES, LARGE_BATCH_SIZE, MAX_BATCH_COUNT, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
 };
 
 #[test]
@@ -863,4 +863,12 @@ fn test_token_getters() {
     let new_token_address = cfg.new_token.contract_address();
     assert_eq!(token_migration.get_legacy_token(), legacy_token_address);
     assert_eq!(token_migration.get_new_token(), new_token_address);
+}
+
+#[test]
+fn test_fixed_batch_sizes_descending_order() {
+    let batch_sizes = FIXED_BATCH_SIZES.span();
+    for i in 0..batch_sizes.len() - 1 {
+        assert!(batch_sizes[i] >= batch_sizes[i + 1]);
+    }
 }

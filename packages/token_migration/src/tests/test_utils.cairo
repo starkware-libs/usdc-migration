@@ -1,6 +1,6 @@
 use constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_BUFFER,
-    OWNER_ADDRESS, TOKEN_SUPPLIER,
+    INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_BUFFER, OWNER_ADDRESS, TOKEN_SUPPLIER,
+    TOKEN_SUPPLY,
 };
 use core::num::traits::Zero;
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -35,12 +35,12 @@ pub(crate) mod constants {
     use starknet::{ContractAddress, EthAddress};
 
     // Total legacy Token supply is ~140 million.
-    pub const INITIAL_SUPPLY: u256 = 140
+    pub const TOKEN_SUPPLY: u256 = 140
         * 10_u256.pow(6)
         * 10_u256.pow(6); // 140 * million * decimals
     // TODO: Change to the real value.
     pub const LEGACY_BUFFER: u256 = 1_000_000_000_000;
-    pub const INITIAL_CONTRACT_SUPPLY: u256 = INITIAL_SUPPLY / 20;
+    pub const INITIAL_SUPPLY: u256 = TOKEN_SUPPLY / 20;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }
@@ -65,9 +65,7 @@ pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
 }
 
 fn init_token_supplier(cfg: TokenMigrationCfg) {
-    supply_contract(
-        target: cfg.token_supplier, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
-    );
+    supply_contract(target: cfg.token_supplier, token: cfg.new_token, amount: INITIAL_SUPPLY);
     let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
     cheat_caller_address_once(
         contract_address: new_token.contract_address, caller_address: cfg.token_supplier,
@@ -90,10 +88,10 @@ pub(crate) fn verify_l1_recipient(cfg: TokenMigrationCfg) {
 
 pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
     let legacy_config = TokenConfig {
-        name: "Legacy-Token", symbol: "Legacy-Token", initial_supply: INITIAL_SUPPLY, owner,
+        name: "Legacy-Token", symbol: "Legacy-Token", initial_supply: TOKEN_SUPPLY, owner,
     };
     let new_config = TokenConfig {
-        name: "New-Token", symbol: "New-Token", initial_supply: INITIAL_SUPPLY, owner,
+        name: "New-Token", symbol: "New-Token", initial_supply: TOKEN_SUPPLY, owner,
     };
     let legacy_state = legacy_config.deploy();
     let new_state = new_config.deploy();

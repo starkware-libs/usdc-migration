@@ -29,8 +29,7 @@ use token_migration::interface::{
 };
 use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use token_migration::tests::test_utils::constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_BUFFER,
-    OWNER_ADDRESS, TOKEN_SUPPLIER,
+    INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_BUFFER, OWNER_ADDRESS, TOKEN_SUPPLIER,
 };
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
@@ -360,10 +359,7 @@ fn test_swap_to_new() {
 
     // Assert contract balances are correct.
     assert_balances(
-        :cfg,
-        account: token_supplier,
-        legacy_balance: amount,
-        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+        :cfg, account: token_supplier, legacy_balance: amount, new_balance: INITIAL_SUPPLY - amount,
     );
 
     // Assert event is emitted.
@@ -383,7 +379,7 @@ fn test_swap_to_new() {
 fn test_swap_to_new_zero() {
     let cfg = generic_test_fixture();
     let token_supplier = cfg.token_supplier;
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = INITIAL_SUPPLY / 10;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
 
     // Zero swap.
@@ -392,10 +388,7 @@ fn test_swap_to_new_zero() {
     // Assert balances are correct.
     assert_balances(:cfg, account: user, legacy_balance: amount, new_balance: Zero::zero());
     assert_balances(
-        :cfg,
-        account: token_supplier,
-        legacy_balance: Zero::zero(),
-        new_balance: INITIAL_CONTRACT_SUPPLY,
+        :cfg, account: token_supplier, legacy_balance: Zero::zero(), new_balance: INITIAL_SUPPLY,
     );
 }
 
@@ -473,7 +466,7 @@ fn test_send_legacy_balance_to_l1() {
         :cfg,
         account: cfg.token_supplier,
         legacy_balance: Zero::zero(),
-        new_balance: INITIAL_CONTRACT_SUPPLY,
+        new_balance: INITIAL_SUPPLY,
     );
 
     // Swap without triggering send to l1.
@@ -491,7 +484,7 @@ fn test_send_legacy_balance_to_l1() {
         :cfg,
         account: cfg.token_supplier,
         legacy_balance: Zero::zero(),
-        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+        new_balance: INITIAL_SUPPLY - amount,
     );
 }
 
@@ -569,7 +562,7 @@ fn test_finalize_setup_assertions() {
 fn test_swap_to_legacy() {
     let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = INITIAL_SUPPLY / 10;
     let user = new_user(id: 0, token: cfg.new_token, initial_balance: amount);
     supply_contract(target: cfg.token_supplier, token: cfg.legacy_token, :amount);
     let legacy_token_address = cfg.legacy_token.contract_address();
@@ -589,7 +582,7 @@ fn test_swap_to_legacy() {
         :cfg,
         account: cfg.token_supplier,
         legacy_balance: Zero::zero(),
-        new_balance: INITIAL_CONTRACT_SUPPLY + amount,
+        new_balance: INITIAL_SUPPLY + amount,
     );
 
     // Assert event is emitted.
@@ -612,7 +605,7 @@ fn test_swap_to_legacy_zero() {
     let token_migration_dispatcher = ITokenMigrationDispatcher {
         contract_address: token_migration_contract,
     };
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = INITIAL_SUPPLY / 10;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
 
     // Zero swap.
@@ -625,7 +618,7 @@ fn test_swap_to_legacy_zero() {
         :cfg,
         account: cfg.token_supplier,
         legacy_balance: Zero::zero(),
-        new_balance: INITIAL_CONTRACT_SUPPLY,
+        new_balance: INITIAL_SUPPLY,
     );
 }
 
@@ -849,7 +842,7 @@ fn test_allow_swap_to_legacy() {
     assert!(token_migration.can_swap_to_legacy());
 
     // Supply contract and create user.
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let amount = INITIAL_SUPPLY / 10;
     supply_contract(target: token_supplier, token: cfg.legacy_token, :amount);
     let user = new_user(id: 0, token: cfg.new_token, initial_balance: amount);
 
@@ -862,7 +855,7 @@ fn test_allow_swap_to_legacy() {
         :cfg,
         account: token_supplier,
         legacy_balance: amount / 2,
-        new_balance: INITIAL_CONTRACT_SUPPLY + amount / 2,
+        new_balance: INITIAL_SUPPLY + amount / 2,
     );
 
     // Set to false and try to swap to legacy again.
@@ -878,7 +871,7 @@ fn test_allow_swap_to_legacy() {
         :cfg,
         account: token_supplier,
         legacy_balance: amount / 2,
-        new_balance: INITIAL_CONTRACT_SUPPLY + amount / 2,
+        new_balance: INITIAL_SUPPLY + amount / 2,
     );
 
     // Set to true and try to swap to legacy again.
@@ -892,7 +885,7 @@ fn test_allow_swap_to_legacy() {
         :cfg,
         account: token_supplier,
         legacy_balance: Zero::zero(),
-        new_balance: INITIAL_CONTRACT_SUPPLY + amount,
+        new_balance: INITIAL_SUPPLY + amount,
     );
 }
 

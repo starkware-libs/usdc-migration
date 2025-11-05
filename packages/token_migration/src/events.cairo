@@ -18,6 +18,11 @@ pub mod TokenMigrationEvents {
     }
 
     #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct TokenSupplierSet {
+        pub token_supplier: ContractAddress,
+    }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
     pub struct LegacyBalanceBufferUpdated {
         pub old_buffer: u256,
         pub new_buffer: u256,

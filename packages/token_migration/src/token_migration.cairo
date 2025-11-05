@@ -183,10 +183,10 @@ pub mod TokenMigration {
             if legacy_balance > 0 {
                 self
                     .send_legacy_amount_to_l1(
-                        amount: legacy_balance,
                         starkgate_dispatcher: self.starkgate_dispatcher.read(),
-                        l1_recipient: self.l1_recipient.read(),
                         l1_token: self.l1_token_address.read(),
+                        l1_recipient: self.l1_recipient.read(),
+                        amount: legacy_balance,
                     );
             }
         }
@@ -274,17 +274,19 @@ pub mod TokenMigration {
             for _ in 0..batch_count {
                 self
                     .send_legacy_amount_to_l1(
-                        amount: batch_size, :starkgate_dispatcher, :l1_recipient, :l1_token,
+                        :starkgate_dispatcher, :l1_token, :l1_recipient, amount: batch_size,
                     );
             }
         }
 
+        /// Sends `amount` of legacy token to L1 using StarkGate bridge.
+        #[inline(always)]
         fn send_legacy_amount_to_l1(
             self: @ContractState,
-            amount: u256,
             starkgate_dispatcher: ITokenBridgeDispatcher,
-            l1_recipient: EthAddress,
             l1_token: EthAddress,
+            l1_recipient: EthAddress,
+            amount: u256,
         ) {
             starkgate_dispatcher.initiate_token_withdraw(:l1_token, :l1_recipient, :amount);
         }

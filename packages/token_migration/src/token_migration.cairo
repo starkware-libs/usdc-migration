@@ -10,7 +10,6 @@ pub mod TokenMigration {
     use starknet::{
         ClassHash, ContractAddress, EthAddress, get_caller_address, get_contract_address,
     };
-    use starkware_utils::constants::MAX_U256;
     use starkware_utils::span::contains;
     use token_migration::errors::Errors;
     use token_migration::events::TokenMigrationEvents::{
@@ -154,11 +153,6 @@ pub mod TokenMigration {
             self.ownable.assert_only_owner();
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             self.token_supplier.write(token_supplier);
-            // TODO: Delete once using token supplier.
-            // Infinite approval to l2 address for both legacy and new tokens.
-            let owner = get_caller_address();
-            self.legacy_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
-            self.new_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
             self.emit(TokenSupplierSet { token_supplier });
         }
 
@@ -184,8 +178,14 @@ pub mod TokenMigration {
         fn send_legacy_balance_to_l1(ref self: ContractState) {
             self.ownable.assert_only_owner();
             let legacy_token = self.legacy_token_dispatcher.read();
-            let legacy_balance = legacy_token.balance_of(get_contract_address());
+            let token_supplier = self.token_supplier.read();
+            let legacy_balance = legacy_token.balance_of(token_supplier);
             if legacy_balance > 0 {
+                // Transfer the entire legacy balance from the token supplier to the contract.
+                self
+                    .transfer_legacy_from_supplier(
+                        :legacy_token, :token_supplier, amount: legacy_balance,
+                    );
                 // Send the entire legacy balance to L1 using StarkGate bridge.
                 let starkgate_dispatcher = self.starkgate_dispatcher.read();
                 starkgate_dispatcher
@@ -221,23 +221,28 @@ pub mod TokenMigration {
             to_token: IERC20Dispatcher,
             amount: u256,
         ) {
-            assert(self.token_supplier.read().is_non_zero(), Errors::CONTRACT_SETUP_NOT_FINALIZED);
             let user = get_caller_address();
             let contract_address = get_contract_address();
+            let token_supplier = self.token_supplier.read();
+            assert(token_supplier.is_non_zero(), Errors::CONTRACT_SETUP_NOT_FINALIZED);
             assert(amount <= from_token.balance_of(user), Errors::INSUFFICIENT_CALLER_BALANCE);
             assert(
                 amount <= from_token.allowance(owner: user, spender: contract_address),
-                Errors::INSUFFICIENT_ALLOWANCE,
+                Errors::INSUFFICIENT_CALLER_ALLOWANCE,
             );
             assert(
-                amount <= to_token.balance_of(contract_address),
-                Errors::INSUFFICIENT_CONTRACT_BALANCE,
+                amount <= to_token.balance_of(token_supplier),
+                Errors::INSUFFICIENT_SUPPLIER_BALANCE,
+            );
+            assert(
+                amount <= to_token.allowance(owner: token_supplier, spender: contract_address),
+                Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE,
             );
 
             let success = from_token
-                .transfer_from(sender: user, recipient: contract_address, :amount);
+                .transfer_from(sender: user, recipient: token_supplier, :amount);
             assert(success, Errors::TRANSFER_FROM_CALLER_FAILED);
-            let success = to_token.transfer(recipient: user, :amount);
+            let success = to_token.transfer_from(sender: token_supplier, recipient: user, :amount);
             assert(success, Errors::TRANSFER_TO_CALLER_FAILED);
             // TODO: Add balance checks here for both tokens to be sure the transfer was successful?
 
@@ -259,7 +264,8 @@ pub mod TokenMigration {
         /// 100K will be performed.
         fn process_legacy_balance(ref self: ContractState) {
             let legacy_token = self.legacy_token_dispatcher.read();
-            let legacy_balance = legacy_token.balance_of(get_contract_address());
+            let token_supplier = self.token_supplier.read();
+            let legacy_balance = legacy_token.balance_of(token_supplier);
             let legacy_buffer = self.legacy_buffer.read();
             let batch_size = self.batch_size.read();
             if legacy_balance < (legacy_buffer + batch_size) {
@@ -267,6 +273,13 @@ pub mod TokenMigration {
             }
             let available_balance = legacy_balance - legacy_buffer;
             let batch_count = min(available_balance / batch_size, MAX_BATCH_COUNT.into());
+            let balance_to_send = batch_size * batch_count;
+            // Transfer the balance from the token supplier to the contract.
+            self
+                .transfer_legacy_from_supplier(
+                    :legacy_token, :token_supplier, amount: balance_to_send,
+                );
+            // Send the balance to L1 in batches.
             let starkgate_dispatcher = self.starkgate_dispatcher.read();
             let l1_token = self.l1_token_address.read();
             let l1_recipient = self.l1_recipient.read();
@@ -275,6 +288,30 @@ pub mod TokenMigration {
                 starkgate_dispatcher
                     .initiate_token_withdraw(:l1_token, :l1_recipient, amount: batch_size);
             }
+            // Contract should have zero balance of legacy token.
+            assert(
+                legacy_token.balance_of(get_contract_address()).is_zero(),
+                Errors::SEND_TO_L1_FAILED,
+            );
+        }
+
+        /// Transfer `amount` of legacy token from the token supplier to the contract.
+        /// Precondition: Sufficient balance of legacy token.
+        fn transfer_legacy_from_supplier(
+            ref self: ContractState,
+            legacy_token: IERC20Dispatcher,
+            token_supplier: ContractAddress,
+            amount: u256,
+        ) {
+            assert(
+                amount <= legacy_token
+                    .allowance(owner: token_supplier, spender: get_contract_address()),
+                Errors::INSUFFICIENT_LEGACY_ALLOWANCE,
+            );
+            let success = legacy_token
+                .transfer_from(sender: token_supplier, recipient: get_contract_address(), :amount);
+            assert(success, Errors::TRANSFER_FROM_SUPPLIER_FAILED);
+            // TODO: Assert contract balance?
         }
     }
 }

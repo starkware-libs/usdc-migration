@@ -12,9 +12,7 @@ pub mod TokenMigration {
     };
     use starkware_utils::constants::MAX_U256;
     use token_migration::errors::Errors;
-    use token_migration::events::TokenMigrationEvents::{
-        L1RecipientVerified, ThresholdSet, TokenMigrated,
-    };
+    use token_migration::events::TokenMigrationEvents;
     use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
     use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 
@@ -66,9 +64,9 @@ pub mod TokenMigration {
     pub enum Event {
         OwnableEvent: OwnableComponent::Event,
         UpgradeableEvent: UpgradeableComponent::Event,
-        TokenMigrated: TokenMigrated,
-        L1RecipientVerified: L1RecipientVerified,
-        ThresholdSet: ThresholdSet,
+        TokenMigrated: TokenMigrationEvents::TokenMigrated,
+        L1RecipientVerified: TokenMigrationEvents::L1RecipientVerified,
+        ThresholdSet: TokenMigrationEvents::ThresholdSet,
     }
 
     #[constructor]
@@ -167,7 +165,7 @@ pub mod TokenMigration {
             self.batch_size.write(new_batch_size);
             self
                 .emit(
-                    ThresholdSet {
+                    TokenMigrationEvents::ThresholdSet {
                         old_threshold, new_threshold: threshold, old_batch_size, new_batch_size,
                     },
                 );
@@ -211,7 +209,7 @@ pub mod TokenMigration {
         let l1_recipient = self.l1_recipient.read();
         if from_address == l1_recipient.into() {
             self.l1_recipient_verified.write(true);
-            self.emit(L1RecipientVerified { l1_recipient });
+            self.emit(TokenMigrationEvents::L1RecipientVerified { l1_recipient });
         }
     }
 
@@ -244,7 +242,7 @@ pub mod TokenMigration {
 
             self
                 .emit(
-                    TokenMigrated {
+                    TokenMigrationEvents::TokenMigrated {
                         user,
                         from_token: from_token.contract_address,
                         to_token: to_token.contract_address,

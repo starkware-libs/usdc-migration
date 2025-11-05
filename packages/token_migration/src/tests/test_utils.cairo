@@ -9,6 +9,7 @@ use snforge_std::{
     set_balance,
 };
 use starknet::{ContractAddress, EthAddress, Store};
+use starkware_utils::constants::MAX_U256;
 use starkware_utils_testing::test_utils::{Deployable, TokenConfig, cheat_caller_address_once};
 use token_migration::interface::{
     ITokenMigrationAdminDispatcher, ITokenMigrationAdminDispatcherTrait, ITokenMigrationDispatcher,
@@ -56,13 +57,27 @@ pub(crate) mod constants {
 
 pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
     let mut cfg = deploy_token_migration();
-    supply_contract(
-        target: cfg.token_migration_contract, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
-    );
-    verify_l1_recipient(:cfg);
     cfg.token_supplier = TOKEN_SUPPLIER();
+    init_token_supplier(:cfg);
+    verify_l1_recipient(:cfg);
     finalize_setup(:cfg, token_supplier: cfg.token_supplier);
     cfg
+}
+
+fn init_token_supplier(cfg: TokenMigrationCfg) {
+    supply_contract(
+        target: cfg.token_supplier, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
+    );
+    let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+    cheat_caller_address_once(
+        contract_address: new_token.contract_address, caller_address: cfg.token_supplier,
+    );
+    new_token.approve(spender: cfg.token_migration_contract, amount: MAX_U256);
+    let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
+    cheat_caller_address_once(
+        contract_address: legacy_token.contract_address, caller_address: cfg.token_supplier,
+    );
+    legacy_token.approve(spender: cfg.token_migration_contract, amount: MAX_U256);
 }
 
 pub(crate) fn verify_l1_recipient(cfg: TokenMigrationCfg) {

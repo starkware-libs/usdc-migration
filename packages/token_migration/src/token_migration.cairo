@@ -14,7 +14,7 @@ pub mod TokenMigration {
     use starkware_utils::span::contains;
     use token_migration::errors::Errors;
     use token_migration::events::TokenMigrationEvents::{
-        BatchSizeSet, L1RecipientVerified, LegacyBufferSet, TokenMigrated,
+        BatchSizeSet, L1RecipientVerified, LegacyBufferSet, TokenMigrated, TokenSupplierSet,
     };
     use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
     use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
@@ -59,6 +59,8 @@ pub mod TokenMigration {
         l1_recipient_verified: bool,
         /// Indicates if reverse swap (new -> legacy) is allowed.
         allow_swap_to_legacy: bool,
+        /// Address that holds the token funds used for swapping.
+        token_supplier: ContractAddress,
     }
 
     #[event]
@@ -68,6 +70,7 @@ pub mod TokenMigration {
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenMigrated: TokenMigrated,
         L1RecipientVerified: L1RecipientVerified,
+        TokenSupplierSet: TokenSupplierSet,
         LegacyBufferSet: LegacyBufferSet,
         BatchSizeSet: BatchSizeSet,
     }
@@ -147,6 +150,18 @@ pub mod TokenMigration {
 
     #[abi(embed_v0)]
     pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> {
+        fn finalize_setup(ref self: ContractState, token_supplier: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
+            self.token_supplier.write(token_supplier);
+            // TODO: Delete once using token supplier.
+            // Infinite approval to l2 address for both legacy and new tokens.
+            let owner = get_caller_address();
+            self.legacy_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
+            self.new_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
+            self.emit(TokenSupplierSet { token_supplier });
+        }
+
         fn set_legacy_buffer(ref self: ContractState, buffer: u256) {
             self.ownable.assert_only_owner();
             let old_buffer = self.legacy_buffer.read();
@@ -168,7 +183,6 @@ pub mod TokenMigration {
 
         fn send_legacy_balance_to_l1(ref self: ContractState) {
             self.ownable.assert_only_owner();
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(get_contract_address());
             if legacy_balance > 0 {
@@ -181,14 +195,6 @@ pub mod TokenMigration {
                         amount: legacy_balance,
                     );
             }
-        }
-
-        fn verify_owner(ref self: ContractState) {
-            self.ownable.assert_only_owner();
-            // Infinite approval to l2 address for both legacy and new tokens.
-            let owner = get_caller_address();
-            self.legacy_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
-            self.new_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
         }
 
         fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
@@ -215,6 +221,7 @@ pub mod TokenMigration {
             to_token: IERC20Dispatcher,
             amount: u256,
         ) {
+            assert(self.token_supplier.read().is_non_zero(), Errors::CONTRACT_SETUP_NOT_FINALIZED);
             let user = get_caller_address();
             let contract_address = get_contract_address();
             assert(amount <= from_token.balance_of(user), Errors::INSUFFICIENT_CALLER_BALANCE);
@@ -251,7 +258,6 @@ pub mod TokenMigration {
         /// E.g. If batch size is 100K, buffer is 350K and current balance is 700K, 3 withdrawals of
         /// 100K will be performed.
         fn process_legacy_balance(ref self: ContractState) {
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(get_contract_address());
             let legacy_buffer = self.legacy_buffer.read();

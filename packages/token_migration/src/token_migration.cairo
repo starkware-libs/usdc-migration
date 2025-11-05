@@ -22,8 +22,9 @@ pub mod TokenMigration {
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
     pub(crate) const XL_BATCH_SIZE: u256 = 1_000_000_000_000_u256;
     /// Fixed set of batch sizes used when bridging the legacy token to L1.
+    /// This array must be sorted in descending order.
     pub(crate) const FIXED_BATCH_SIZES: [u256; 3] = [
-        SMALL_BATCH_SIZE, LARGE_BATCH_SIZE, XL_BATCH_SIZE,
+        XL_BATCH_SIZE, LARGE_BATCH_SIZE, SMALL_BATCH_SIZE,
     ];
     /// Maximum number of batches that can be sent to L1 in a single transaction.
     pub(crate) const MAX_BATCH_COUNT: u8 = 100;
@@ -153,9 +154,8 @@ pub mod TokenMigration {
             let old_batch_size = self.batch_size.read();
             // Infer the batch size from the threshold.
             let mut new_batch_size = Zero::zero();
-            let len = batch_sizes.len();
-            for i in 0..len {
-                let batch_size = *batch_sizes[len - 1 - i];
+            for i in 0..batch_sizes.len() {
+                let batch_size = *batch_sizes[i];
                 if batch_size <= threshold {
                     new_batch_size = batch_size;
                     break;

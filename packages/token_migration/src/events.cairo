@@ -18,9 +18,13 @@ pub mod TokenMigrationEvents {
     }
 
     #[derive(Drop, starknet::Event, Debug, PartialEq)]
-    pub struct ThresholdSet {
-        pub old_threshold: u256,
-        pub new_threshold: u256,
+    pub struct LegacyBalanceBufferUpdated {
+        pub old_buffer: u256,
+        pub new_buffer: u256,
+    }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct BatchSizeUpdated {
         pub old_batch_size: u256,
         pub new_batch_size: u256,
     }

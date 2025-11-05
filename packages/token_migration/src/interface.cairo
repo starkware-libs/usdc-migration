@@ -18,10 +18,12 @@ pub trait ITokenMigration<T> {
 
 #[starknet::interface]
 pub trait ITokenMigrationAdmin<T> {
-    /// Sets the legacy token threshold amount that triggers transferring the legacy token to the L1
-    /// recipient.
+    /// Sets the minimum legacy token balance to keep in the supplier before sending excess to L1.
     /// Caller must be the owner.
-    fn set_legacy_threshold(ref self: T, threshold: u256);
+    fn set_legacy_buffer(ref self: T, buffer: u256);
+    /// Sets the exact amount of legacy token sent to L1 in a single withdraw action.
+    /// Caller must be the owner.
+    fn set_batch_size(ref self: T, batch_size: u256);
     /// Sends the entire legacy token balance to the L1 recipient.
     /// Caller must be the owner.
     fn send_legacy_balance_to_l1(ref self: T);

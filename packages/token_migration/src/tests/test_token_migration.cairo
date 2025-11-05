@@ -30,12 +30,12 @@ use token_migration::interface::{
 use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use token_migration::tests::test_utils::constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
-    OWNER_ADDRESS,
+    OWNER_ADDRESS, TOKEN_SUPPLIER,
 };
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
-    deploy_mock_bridge, deploy_token_migration, deploy_tokens, generic_load, generic_test_fixture,
-    new_user, set_legacy_threshold, supply_contract, verify_l1_recipient,
+    deploy_mock_bridge, deploy_token_migration, deploy_tokens, finalize_setup, generic_load,
+    generic_test_fixture, new_user, set_legacy_threshold, supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait, WithdrawInitiated,
@@ -179,14 +179,6 @@ fn test_set_legacy_threshold_assertions() {
     let result = token_migration_admin_safe_dispatcher
         .set_legacy_threshold(threshold: invalid_threshold);
     assert_panic_with_felt_error(:result, expected_error: Errors::THRESHOLD_TOO_SMALL);
-
-    // Catch l1 recipient not verified.
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    let result = token_migration_admin_safe_dispatcher
-        .set_legacy_threshold(threshold: LEGACY_THRESHOLD);
-    assert_panic_with_felt_error(:result, expected_error: Errors::L1_RECIPIENT_NOT_VERIFIED);
 }
 
 #[test]
@@ -342,8 +334,7 @@ fn test_swap_to_new() {
 
 #[test]
 fn test_swap_to_new_zero() {
-    let cfg = deploy_token_migration();
-    verify_l1_recipient(:cfg);
+    let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
@@ -357,7 +348,7 @@ fn test_swap_to_new_zero() {
         :cfg,
         account: token_migration_contract,
         legacy_balance: Zero::zero(),
-        new_balance: Zero::zero(),
+        new_balance: INITIAL_CONTRACT_SUPPLY,
     );
 }
 
@@ -374,7 +365,14 @@ fn test_swap_to_new_assertions() {
     let legacy_token_address = cfg.legacy_token.contract_address();
     let legacy_dispatcher = IERC20Dispatcher { contract_address: legacy_token_address };
 
+    // Contract setup not completed.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    let result = token_migration_safe_dispatcher.swap_to_new(:amount);
+    assert_panic_with_felt_error(:result, expected_error: Errors::CONTRACT_SETUP_NOT_FINALIZED);
+
     // Insufficient user balance.
+    verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
     legacy_dispatcher.approve(spender: token_migration_contract, :amount);
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
@@ -395,15 +393,6 @@ fn test_swap_to_new_assertions() {
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_new(:amount);
     assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CONTRACT_BALANCE);
-
-    // L1 recipient not verified.
-    supply_contract(target: token_migration_contract, token: cfg.new_token, :amount);
-    supply_contract(target: user, token: cfg.legacy_token, :amount);
-    cheat_caller_address_once(contract_address: legacy_token_address, caller_address: user);
-    legacy_dispatcher.approve(spender: token_migration_contract, :amount);
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    let result = token_migration_safe_dispatcher.swap_to_new(:amount);
-    assert_panic_with_felt_error(:result, expected_error: Errors::L1_RECIPIENT_NOT_VERIFIED);
 }
 
 #[test]
@@ -464,32 +453,17 @@ fn test_send_legacy_balance_to_l1_assertions() {
     // Catch only owner.
     let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
-
-    // Catch l1 recipient not verified.
-    supply_contract(target: token_migration_contract, token: cfg.legacy_token, amount: 1);
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
-    assert_panic_with_felt_error(:result, expected_error: Errors::L1_RECIPIENT_NOT_VERIFIED);
 }
 
 #[test]
-#[feature("safe_dispatcher")]
-fn test_verify_owner_l2_address() {
+fn test_finalize_setup() {
     let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_admin_safe_dispatcher = ITokenMigrationAdminSafeDispatcher {
-        contract_address: token_migration_contract,
-    };
-    let result = token_migration_admin_safe_dispatcher.verify_owner();
-    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
-
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
+    verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
+    assert_eq!(
+        generic_load(token_migration_contract, selector!("token_supplier")), TOKEN_SUPPLIER(),
     );
-    let result = token_migration_admin_safe_dispatcher.verify_owner();
-    assert!(result.is_ok());
     // Assert infinite approval to owner for both legacy and new tokens.
     let legacy_dispatcher = IERC20Dispatcher {
         contract_address: cfg.legacy_token.contract_address(),
@@ -504,17 +478,51 @@ fn test_verify_owner_l2_address() {
 }
 
 #[test]
+#[feature("safe_dispatcher")]
+fn test_finalize_setup_assertions() {
+    let cfg = deploy_token_migration();
+    let token_migration_contract = cfg.token_migration_contract;
+    let token_migration_admin_safe_dispatcher = ITokenMigrationAdminSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let token_migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
+        contract_address: token_migration_contract,
+    };
+    let token_supplier = TOKEN_SUPPLIER();
+    let result = token_migration_admin_safe_dispatcher.finalize_setup(:token_supplier);
+    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    let result = token_migration_admin_safe_dispatcher.finalize_setup(:token_supplier);
+    assert_panic_with_felt_error(:result, expected_error: Errors::L1_RECIPIENT_NOT_VERIFIED);
+
+    verify_l1_recipient(:cfg);
+
+    // Complete setup with zero address.
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    let result = token_migration_admin_safe_dispatcher.finalize_setup(token_supplier: Zero::zero());
+    assert!(result.is_ok());
+    let result = token_migration_safe_dispatcher.swap_to_new(amount: Zero::zero());
+    assert_panic_with_felt_error(:result, expected_error: Errors::CONTRACT_SETUP_NOT_FINALIZED);
+    let result = token_migration_safe_dispatcher.swap_to_legacy(amount: Zero::zero());
+    assert_panic_with_felt_error(:result, expected_error: Errors::CONTRACT_SETUP_NOT_FINALIZED);
+}
+
+#[test]
 fn test_swap_to_legacy() {
     let cfg = deploy_token_migration();
-    let amount = INITIAL_CONTRACT_SUPPLY / 10;
-    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
+    verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     let token_migration_contract = cfg.token_migration_contract;
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    let user = new_user(id: 0, token: cfg.new_token, initial_balance: amount);
+    supply_contract(target: token_migration_contract, token: cfg.legacy_token, :amount);
     let legacy_token_address = cfg.legacy_token.contract_address();
     let new_token_address = cfg.new_token.contract_address();
-
-    // Supply user and contract.
-    supply_contract(target: user, token: cfg.new_token, :amount);
-    supply_contract(target: token_migration_contract, token: cfg.legacy_token, :amount);
 
     // Spy events.
     let mut spy = spy_events();
@@ -545,7 +553,7 @@ fn test_swap_to_legacy() {
 
 #[test]
 fn test_swap_to_legacy_zero() {
-    let cfg = deploy_token_migration();
+    let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_dispatcher = ITokenMigrationDispatcher {
         contract_address: token_migration_contract,
@@ -563,7 +571,7 @@ fn test_swap_to_legacy_zero() {
         :cfg,
         account: token_migration_contract,
         legacy_balance: Zero::zero(),
-        new_balance: Zero::zero(),
+        new_balance: INITIAL_CONTRACT_SUPPLY,
     );
 }
 
@@ -580,10 +588,17 @@ fn test_swap_to_legacy_assertions() {
     let new_token_address = cfg.new_token.contract_address();
     let new_dispatcher = IERC20Dispatcher { contract_address: new_token_address };
 
+    // Contract setup not completed.
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
+    let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
+    assert_panic_with_felt_error(res, Errors::CONTRACT_SETUP_NOT_FINALIZED);
+
     // Insufficient user balance.
+    verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
     new_dispatcher.approve(spender: token_migration_contract, :amount);
-    cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CALLER_BALANCE);
 
@@ -598,7 +613,7 @@ fn test_swap_to_legacy_assertions() {
     // Insufficient contract balance.
     cheat_caller_address_once(contract_address: new_token_address, caller_address: user);
     new_dispatcher.approve(spender: token_migration_contract, :amount);
-    cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
+    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe_dispatcher.swap_to_legacy(:amount);
     assert_panic_with_felt_error(res, Errors::INSUFFICIENT_CONTRACT_BALANCE);
 }
@@ -699,6 +714,7 @@ fn test_swap_send_to_l1() {
 fn test_swap_send_to_l1_too_many_batches() {
     let cfg = deploy_token_migration();
     verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     let amount = LEGACY_THRESHOLD * MAX_BATCH_COUNT.into() + LEGACY_THRESHOLD / 2 + 1;
     let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount);
     let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount);
@@ -723,27 +739,6 @@ fn test_swap_send_to_l1_too_many_batches() {
     // Trigger with zero swap.
     approve_and_swap_to_new(:cfg, user: user_2, amount: Zero::zero());
     assert_eq!(legacy_dispatcher.balance_of(account: token_migration_contract), 2);
-}
-
-#[test]
-#[feature("safe_dispatcher")]
-fn test_swap_send_to_l1_without_l1_recipient_verified() {
-    let cfg = deploy_token_migration();
-    let token_migration_safe = ITokenMigrationSafeDispatcher {
-        contract_address: cfg.token_migration_contract,
-    };
-    let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
-    let amount = LEGACY_THRESHOLD;
-    supply_contract(target: cfg.token_migration_contract, token: cfg.new_token, :amount);
-    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
-
-    cheat_caller_address_once(
-        contract_address: cfg.legacy_token.contract_address(), caller_address: user,
-    );
-    legacy_token.approve(spender: cfg.token_migration_contract, :amount);
-    cheat_caller_address_once(contract_address: cfg.token_migration_contract, caller_address: user);
-    let result = token_migration_safe.swap_to_new(:amount);
-    assert_panic_with_felt_error(:result, expected_error: Errors::L1_RECIPIENT_NOT_VERIFIED);
 }
 
 #[test]
@@ -786,6 +781,8 @@ fn test_swap_send_to_l1_multiple_batches() {
 #[feature("safe_dispatcher")]
 fn test_allow_swap_to_legacy() {
     let cfg = deploy_token_migration();
+    verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration = ITokenMigrationDispatcher { contract_address: token_migration_contract };
     let token_migration_safe = ITokenMigrationSafeDispatcher {

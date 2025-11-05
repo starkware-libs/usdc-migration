@@ -1,7 +1,8 @@
 use constants::{
     INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
-    OWNER_ADDRESS,
+    OWNER_ADDRESS, TOKEN_SUPPLIER,
 };
+use core::num::traits::Zero;
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
     ContractClassTrait, CustomToken, DeclareResultTrait, L1HandlerTrait, Token, TokenTrait,
@@ -25,6 +26,7 @@ pub(crate) struct TokenMigrationCfg {
     pub l1_recipient: EthAddress,
     pub owner: ContractAddress,
     pub starkgate_address: ContractAddress,
+    pub token_supplier: ContractAddress,
 }
 
 pub(crate) mod constants {
@@ -48,14 +50,19 @@ pub(crate) mod constants {
     pub fn L1_TOKEN_ADDRESS() -> EthAddress {
         'L1_TOKEN_ADDRESS'.try_into().unwrap()
     }
+    pub fn TOKEN_SUPPLIER() -> ContractAddress {
+        'TOKEN_SUPPLIER'.try_into().unwrap()
+    }
 }
 
 pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
-    let cfg = deploy_token_migration();
+    let mut cfg = deploy_token_migration();
     supply_contract(
         target: cfg.token_migration_contract, token: cfg.new_token, amount: INITIAL_CONTRACT_SUPPLY,
     );
     verify_l1_recipient(:cfg);
+    cfg.token_supplier = TOKEN_SUPPLIER();
+    finalize_setup(:cfg, token_supplier: cfg.token_supplier);
     cfg
 }
 
@@ -118,6 +125,7 @@ pub(crate) fn deploy_token_migration() -> TokenMigrationCfg {
         l1_recipient: L1_RECIPIENT(),
         owner: OWNER_ADDRESS(),
         starkgate_address,
+        token_supplier: Zero::zero(),
     }
 }
 
@@ -193,12 +201,12 @@ pub(crate) fn allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_swap: bool) {
         .allow_swap_to_legacy(:allow_swap);
 }
 
-pub(crate) fn verify_owner(cfg: TokenMigrationCfg) {
+pub(crate) fn finalize_setup(cfg: TokenMigrationCfg, token_supplier: ContractAddress) {
     cheat_caller_address_once(
         contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
     );
     ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
-        .verify_owner();
+        .finalize_setup(:token_supplier);
 }
 
 pub(crate) fn set_legacy_threshold(cfg: TokenMigrationCfg, threshold: u256) {

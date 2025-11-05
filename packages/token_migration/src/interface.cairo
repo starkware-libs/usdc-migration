@@ -18,6 +18,10 @@ pub trait ITokenMigration<T> {
 
 #[starknet::interface]
 pub trait ITokenMigrationAdmin<T> {
+    /// Finalize the contract initialization process. Swaps will fail before calling this function.
+    /// Precondition: L1 recipient is verified.
+    /// Caller must be the owner.
+    fn finalize_setup(ref self: T, token_supplier: ContractAddress);
     /// Sets the legacy token threshold amount that triggers transferring the legacy token to the L1
     /// recipient.
     /// Caller must be the owner.
@@ -25,9 +29,6 @@ pub trait ITokenMigrationAdmin<T> {
     /// Sends the entire legacy token balance to the L1 recipient.
     /// Caller must be the owner.
     fn send_legacy_balance_to_l1(ref self: T);
-    /// Verifies the owner L2 address provided in the constructor is a controlled address.
-    /// Caller must be the owner.
-    fn verify_owner(ref self: T);
     /// Enable / disable reverse swap (new tokens for legacy tokens).
     /// Caller must be the owner.
     fn allow_swap_to_legacy(ref self: T, allow_swap: bool);

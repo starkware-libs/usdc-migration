@@ -15,12 +15,12 @@ use token_migration::interface::{
     ITokenMigrationSafeDispatcherTrait,
 };
 use token_migration::tests::test_utils::constants::{
-    INITIAL_CONTRACT_SUPPLY, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
+    INITIAL_CONTRACT_SUPPLY, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD, TOKEN_SUPPLIER,
 };
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
-    deploy_token_migration, generic_test_fixture, new_user, set_legacy_threshold, supply_contract,
-    verify_l1_recipient, verify_owner,
+    deploy_token_migration, finalize_setup, generic_test_fixture, new_user, set_legacy_threshold,
+    supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::WithdrawInitiated;
 use token_migration::token_migration::TokenMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
@@ -127,6 +127,7 @@ fn test_flow_user_swap_twice() {
 fn test_flow_user_swap_fail_then_succeed() {
     let cfg = deploy_token_migration();
     verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     let amount = INITIAL_CONTRACT_SUPPLY / 100;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let migration_contract = cfg.token_migration_contract;
@@ -199,10 +200,12 @@ fn test_flow_user_swap_fail_then_succeed() {
 #[test]
 #[feature("safe_dispatcher")]
 fn test_token_allowances() {
-    let cfg = generic_test_fixture();
+    let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
     let amount = INITIAL_CONTRACT_SUPPLY;
     supply_contract(target: cfg.token_migration_contract, token: cfg.legacy_token, :amount);
+    supply_contract(target: token_migration_contract, token: cfg.new_token, :amount);
+    verify_l1_recipient(:cfg);
     let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
     let new_token_safe = IERC20SafeDispatcher {
         contract_address: cfg.new_token.contract_address(),
@@ -213,7 +216,7 @@ fn test_token_allowances() {
     };
     let owner = cfg.owner;
 
-    // Attempt to withdraw before verifying owner.
+    // Attempt to withdraw before finalizing setup.
     cheat_caller_address_once(
         contract_address: legacy_token.contract_address, caller_address: owner,
     );
@@ -225,8 +228,8 @@ fn test_token_allowances() {
         .transfer_from(sender: token_migration_contract, recipient: owner, :amount);
     assert_panic_with_felt_error(:result, expected_error: 'ERC20: insufficient allowance');
 
-    // Verify owner.
-    verify_owner(:cfg);
+    // Finalize setup.
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
 
     // Withdraw partial legacy and new tokens.
     cheat_caller_address_once(
@@ -405,7 +408,6 @@ fn swap_fail_after_send_money_from_contract() {
     );
 
     // Transfer all legacy from contract.
-    verify_owner(:cfg);
     cheat_caller_address_once(
         contract_address: legacy_dispatcher.contract_address, caller_address: owner,
     );
@@ -760,6 +762,8 @@ fn test_batch_sizes() {
 #[feature("safe_dispatcher")]
 fn test_allow_swap_to_legacy_twice() {
     let cfg = deploy_token_migration();
+    verify_l1_recipient(:cfg);
+    finalize_setup(:cfg, token_supplier: TOKEN_SUPPLIER());
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration = ITokenMigrationDispatcher { contract_address: token_migration_contract };
     let token_migration_safe = ITokenMigrationSafeDispatcher {
@@ -796,4 +800,12 @@ fn test_allow_swap_to_legacy_twice() {
     assert_balances(
         :cfg, account: token_migration_contract, legacy_balance: Zero::zero(), new_balance: amount,
     );
+}
+
+// TODO: Implement.
+// Test: finalize aetup with wrong token_supplier
+// Test: finalize setup twice
+#[test]
+fn test_finalize_setup_flow() {
+    return;
 }

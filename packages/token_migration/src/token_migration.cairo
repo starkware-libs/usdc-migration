@@ -59,6 +59,8 @@ pub mod TokenMigration {
         l1_recipient_verified: bool,
         /// Indicates if reverse swap (new -> legacy) is allowed.
         allow_swap_to_legacy: bool,
+        /// Address that holds the token funds used for swapping.
+        token_supplier: ContractAddress,
     }
 
     #[event]
@@ -147,6 +149,18 @@ pub mod TokenMigration {
 
     #[abi(embed_v0)]
     pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> {
+        fn finalize_setup(ref self: ContractState, token_supplier: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
+            self.token_supplier.write(token_supplier);
+            // Infinite approval to l2 address for both legacy and new tokens.
+            // TODO: Approve to token supplier instead of owner?
+            let owner = get_caller_address();
+            self.legacy_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
+            self.new_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
+        }
+
+        // TODO: Assert finalize_setup already done?
         fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
             self.ownable.assert_only_owner();
             let batch_sizes = FIXED_BATCH_SIZES.span();
@@ -175,9 +189,9 @@ pub mod TokenMigration {
             self.process_legacy_balance();
         }
 
+        // TODO: Assert finalize_setup already done?
         fn send_legacy_balance_to_l1(ref self: ContractState) {
             self.ownable.assert_only_owner();
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(get_contract_address());
             if legacy_balance > 0 {
@@ -189,14 +203,6 @@ pub mod TokenMigration {
                         amount: legacy_balance,
                     );
             }
-        }
-
-        fn verify_owner(ref self: ContractState) {
-            self.ownable.assert_only_owner();
-            // Infinite approval to l2 address for both legacy and new tokens.
-            let owner = get_caller_address();
-            self.legacy_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
-            self.new_token_dispatcher.read().approve(spender: owner, amount: MAX_U256);
         }
 
         fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
@@ -223,6 +229,7 @@ pub mod TokenMigration {
             to_token: IERC20Dispatcher,
             amount: u256,
         ) {
+            assert(self.token_supplier.read().is_non_zero(), Errors::CONTRACT_SETUP_NOT_FINALIZED);
             let user = get_caller_address();
             let contract_address = get_contract_address();
             assert(amount <= from_token.balance_of(user), Errors::INSUFFICIENT_CALLER_BALANCE);
@@ -256,7 +263,6 @@ pub mod TokenMigration {
         /// If the contract's balance of legacy tokens exceeds the legacy_threshold
         /// legacy_token are withdrawn to L1 using StarkGate bridge, using fixed amounts.
         fn process_legacy_balance(ref self: ContractState) {
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(get_contract_address());
             let threshold = self.legacy_threshold.read();

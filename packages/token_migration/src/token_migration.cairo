@@ -106,7 +106,7 @@ pub mod TokenMigration {
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.ownable.assert_only_owner();
-            self.upgradeable.upgrade(new_class_hash);
+            self.upgradeable.upgrade(:new_class_hash);
         }
     }
 
@@ -179,7 +179,7 @@ pub mod TokenMigration {
             self.ownable.assert_only_owner();
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
-            let legacy_balance = legacy_token.balance_of(account: get_contract_address());
+            let legacy_balance = legacy_token.balance_of(get_contract_address());
             if legacy_balance > 0 {
                 self
                     .send_legacy_amount_to_l1(
@@ -225,15 +225,13 @@ pub mod TokenMigration {
         ) {
             let user = get_caller_address();
             let contract_address = get_contract_address();
-            assert(
-                amount <= from_token.balance_of(account: user), Errors::INSUFFICIENT_CALLER_BALANCE,
-            );
+            assert(amount <= from_token.balance_of(user), Errors::INSUFFICIENT_CALLER_BALANCE);
             assert(
                 amount <= from_token.allowance(owner: user, spender: contract_address),
                 Errors::INSUFFICIENT_ALLOWANCE,
             );
             assert(
-                amount <= to_token.balance_of(account: contract_address),
+                amount <= to_token.balance_of(contract_address),
                 Errors::INSUFFICIENT_CONTRACT_BALANCE,
             );
 
@@ -260,7 +258,7 @@ pub mod TokenMigration {
         fn process_legacy_balance(ref self: ContractState) {
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
-            let legacy_balance = legacy_token.balance_of(account: get_contract_address());
+            let legacy_balance = legacy_token.balance_of(get_contract_address());
             let threshold = self.legacy_threshold.read();
             if legacy_balance < threshold {
                 return;

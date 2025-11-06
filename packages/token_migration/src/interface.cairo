@@ -18,7 +18,7 @@ pub trait ITokenMigration<T> {
 
 #[starknet::interface]
 pub trait ITokenMigrationAdmin<T> {
-    /// Finalize the contract initialization process. Swaps will fail before calling this function.
+    /// Finalizes the contract initialization process. Swaps will fail before calling this function.
     /// Precondition: L1 recipient is verified.
     /// Caller must be the owner.
     fn finalize_setup(ref self: T, token_supplier: ContractAddress);

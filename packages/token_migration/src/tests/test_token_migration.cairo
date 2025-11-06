@@ -307,6 +307,46 @@ fn test_set_batch_size_without_triggering_send_to_l1() {
 }
 
 #[test]
+fn test_set_batch_size_send_to_l1_fail() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let token_supplier = cfg.token_supplier;
+    // Insufficient allowance for contract to transfer from supplier.
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: token_supplier,
+    );
+    legacy_dispatcher.approve(spender: token_migration_contract, amount: Zero::zero());
+    // Supply token supplier with legacy tokens.
+    let legacy_amount = LEGACY_BUFFER + SMALL_BATCH_SIZE;
+    supply_contract(target: token_supplier, token: cfg.legacy_token, amount: legacy_amount);
+    // set_batch_size should work without sending to l1.
+    set_batch_size(:cfg, batch_size: SMALL_BATCH_SIZE);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: legacy_amount,
+        new_balance: INITIAL_CONTRACT_SUPPLY,
+    );
+    // Sufficient allowance for contract to transfer from supplier.
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: token_supplier,
+    );
+    legacy_dispatcher.approve(spender: token_migration_contract, amount: SMALL_BATCH_SIZE);
+    // Zero swap should trigger sending to l1.
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: Zero::zero());
+    approve_and_swap_to_new(:cfg, :user, amount: Zero::zero());
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_CONTRACT_SUPPLY,
+    );
+}
+
+#[test]
 fn test_upgrade() {
     let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
@@ -454,6 +494,46 @@ fn test_swap_to_new_assertions() {
 }
 
 #[test]
+fn test_swap_to_new_send_to_l1_fail() {
+    let cfg = generic_test_fixture();
+    let token_migration_contract = cfg.token_migration_contract;
+    let amount = LEGACY_BUFFER + 2 * LARGE_BATCH_SIZE;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    let legacy_dispatcher = IERC20Dispatcher {
+        contract_address: cfg.legacy_token.contract_address(),
+    };
+    let token_supplier = cfg.token_supplier;
+    // Insufficient allowance for contract to transfer from supplier.
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: token_supplier,
+    );
+    legacy_dispatcher.approve(spender: token_migration_contract, amount: 2 * LARGE_BATCH_SIZE - 1);
+    // Swap should work without sending to l1.
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: amount,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+    );
+    // Sufficient allowance for contract to transfer from supplier.
+    cheat_caller_address_once(
+        contract_address: legacy_dispatcher.contract_address, caller_address: token_supplier,
+    );
+    legacy_dispatcher.approve(spender: token_migration_contract, :amount);
+    // Zero swap should trigger sending to l1.
+    approve_and_swap_to_new(:cfg, :user, amount: Zero::zero());
+    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_CONTRACT_SUPPLY - amount,
+    );
+}
+
+#[test]
 fn test_send_legacy_balance_to_l1() {
     let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
@@ -502,15 +582,30 @@ fn test_send_legacy_balance_to_l1() {
 #[test]
 #[feature("safe_dispatcher")]
 fn test_send_legacy_balance_to_l1_assertions() {
-    let cfg = deploy_token_migration();
+    let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_admin_safe_dispatcher = ITokenMigrationAdminSafeDispatcher {
         contract_address: token_migration_contract,
     };
+    let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
 
     // Catch only owner.
     let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
+
+    // INSUFFICIENT_LEGACY_ALLOWANCE.
+    let token_supplier = cfg.token_supplier;
+    let amount = INITIAL_CONTRACT_SUPPLY / 10;
+    supply_contract(target: token_supplier, token: cfg.legacy_token, :amount);
+    cheat_caller_address_once(
+        contract_address: legacy_token.contract_address, caller_address: token_supplier,
+    );
+    legacy_token.approve(spender: token_migration_contract, amount: Zero::zero());
+    cheat_caller_address_once(
+        contract_address: token_migration_contract, caller_address: cfg.owner,
+    );
+    let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
+    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_LEGACY_ALLOWANCE);
 }
 
 #[test]

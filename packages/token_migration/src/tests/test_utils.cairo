@@ -1,6 +1,6 @@
 use constants::{
     DECIMALS, INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS,
-    LEGACY_THRESHOLD, OWNER_ADDRESS,
+    LEGACY_BUFFER, OWNER_ADDRESS,
 };
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
@@ -30,14 +30,13 @@ pub(crate) struct TokenMigrationCfg {
 pub(crate) mod constants {
     use core::num::traits::Pow;
     use starknet::{ContractAddress, EthAddress};
-    use crate::token_migration::TokenMigration::LARGE_BATCH_SIZE;
 
     // Total legacy Token supply is ~140 million.
     pub const INITIAL_SUPPLY: u256 = 140
         * 10_u256.pow(6)
         * 10_u256.pow(6); // 140 * million * decimals
     // TODO: Change to the real value.
-    pub const LEGACY_THRESHOLD: u256 = LARGE_BATCH_SIZE;
+    pub const LEGACY_BUFFER: u256 = 1_000_000_000_000;
     pub const INITIAL_CONTRACT_SUPPLY: u256 = INITIAL_SUPPLY / 20;
     pub const DECIMALS: u8 = 6;
     pub fn OWNER_ADDRESS() -> ContractAddress {
@@ -116,7 +115,7 @@ pub(crate) fn deploy_token_migration() -> TokenMigrationCfg {
     L1_RECIPIENT().serialize(ref calldata);
     OWNER_ADDRESS().serialize(ref calldata);
     starkgate_address.serialize(ref calldata);
-    LEGACY_THRESHOLD.serialize(ref calldata);
+    LEGACY_BUFFER.serialize(ref calldata);
     let token_migration_contract = snforge_std::declare("TokenMigration").unwrap().contract_class();
     let (token_migration_contract_address, _) = token_migration_contract.deploy(@calldata).unwrap();
     // Return the configuration with the deployed contract address.
@@ -210,12 +209,20 @@ pub(crate) fn verify_owner(cfg: TokenMigrationCfg) {
         .verify_owner();
 }
 
-pub(crate) fn set_legacy_threshold(cfg: TokenMigrationCfg, threshold: u256) {
+pub(crate) fn set_legacy_buffer(cfg: TokenMigrationCfg, buffer: u256) {
     cheat_caller_address_once(
         contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
     );
     ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
-        .set_legacy_threshold(:threshold);
+        .set_legacy_buffer(:buffer);
+}
+
+pub(crate) fn set_batch_size(cfg: TokenMigrationCfg, batch_size: u256) {
+    cheat_caller_address_once(
+        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
+    );
+    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
+        .set_batch_size(:batch_size);
 }
 
 pub(crate) fn assert_balances(

@@ -11,9 +11,10 @@ pub mod TokenMigration {
         ClassHash, ContractAddress, EthAddress, get_caller_address, get_contract_address,
     };
     use starkware_utils::constants::MAX_U256;
+    use starkware_utils::span::contains;
     use token_migration::errors::Errors;
     use token_migration::events::TokenMigrationEvents::{
-        L1RecipientVerified, ThresholdSet, TokenMigrated,
+        BatchSizeSet, L1RecipientVerified, LegacyBufferSet, TokenMigrated,
     };
     use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
     use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
@@ -22,9 +23,8 @@ pub mod TokenMigration {
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
     pub(crate) const XL_BATCH_SIZE: u256 = 1_000_000_000_000_u256;
     /// Fixed set of batch sizes used when bridging the legacy token to L1.
-    /// This array must be sorted in descending order.
     pub(crate) const FIXED_BATCH_SIZES: [u256; 3] = [
-        XL_BATCH_SIZE, LARGE_BATCH_SIZE, SMALL_BATCH_SIZE,
+        SMALL_BATCH_SIZE, LARGE_BATCH_SIZE, XL_BATCH_SIZE,
     ];
     /// Maximum number of batches that can be sent to L1 in a single transaction.
     pub(crate) const MAX_BATCH_COUNT: u8 = 100;
@@ -50,8 +50,8 @@ pub mod TokenMigration {
         l1_token_address: EthAddress,
         /// StarkGate L2 bridge, used to bridge the legacy token to L1.
         starkgate_dispatcher: ITokenBridgeDispatcher,
-        /// The threshold amount of legacy token balance, that triggers sending to L1.
-        legacy_threshold: u256,
+        /// Minimum balance of legacy token balance to keep in the supplier.
+        legacy_buffer: u256,
         /// The exact amount of legacy token sent to L1 in a single withdraw action.
         /// Must be a value from FIXED_BATCH_SIZES.
         batch_size: u256,
@@ -68,7 +68,8 @@ pub mod TokenMigration {
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenMigrated: TokenMigrated,
         L1RecipientVerified: L1RecipientVerified,
-        ThresholdSet: ThresholdSet,
+        LegacyBufferSet: LegacyBufferSet,
+        BatchSizeSet: BatchSizeSet,
     }
 
     #[constructor]
@@ -79,19 +80,18 @@ pub mod TokenMigration {
         l1_recipient: EthAddress,
         owner: ContractAddress,
         starkgate_address: ContractAddress,
-        legacy_threshold: u256,
+        legacy_buffer: u256,
     ) {
         let starkgate_dispatcher = ITokenBridgeDispatcher { contract_address: starkgate_address };
         let l1_token_address = starkgate_dispatcher.get_l1_token(l2_token: legacy_token);
         assert(l1_token_address.is_non_zero(), Errors::LEGACY_TOKEN_BRIDGE_MISMATCH);
-        assert(LARGE_BATCH_SIZE <= legacy_threshold, Errors::THRESHOLD_TOO_SMALL);
 
         self.legacy_token_dispatcher.write(IERC20Dispatcher { contract_address: legacy_token });
         self.new_token_dispatcher.write(IERC20Dispatcher { contract_address: new_token });
         self.l1_recipient.write(l1_recipient);
         self.l1_token_address.write(l1_token_address);
         self.starkgate_dispatcher.write(starkgate_dispatcher);
-        self.legacy_threshold.write(legacy_threshold);
+        self.legacy_buffer.write(legacy_buffer);
         self.batch_size.write(LARGE_BATCH_SIZE);
         self.allow_swap_to_legacy.write(true);
         self.ownable.initializer(:owner);
@@ -147,31 +147,22 @@ pub mod TokenMigration {
 
     #[abi(embed_v0)]
     pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> {
-        fn set_legacy_threshold(ref self: ContractState, threshold: u256) {
+        fn set_legacy_buffer(ref self: ContractState, buffer: u256) {
             self.ownable.assert_only_owner();
-            let batch_sizes = FIXED_BATCH_SIZES.span();
-            let old_threshold = self.legacy_threshold.read();
+            let old_buffer = self.legacy_buffer.read();
+            self.legacy_buffer.write(buffer);
+            self.emit(LegacyBufferSet { old_buffer, new_buffer: buffer });
+            // Send legacy tokens to L1, if applicable given the new buffer size.
+            self.process_legacy_balance();
+        }
+
+        fn set_batch_size(ref self: ContractState, batch_size: u256) {
+            self.ownable.assert_only_owner();
+            assert(contains(FIXED_BATCH_SIZES.span(), batch_size), Errors::INVALID_BATCH_SIZE);
             let old_batch_size = self.batch_size.read();
-            // Infer the batch size from the threshold.
-            let mut new_batch_size = Zero::zero();
-            for i in 0..batch_sizes.len() {
-                let batch_size = *batch_sizes[i];
-                if batch_size <= threshold {
-                    new_batch_size = batch_size;
-                    break;
-                }
-            }
-            assert(new_batch_size.is_non_zero(), Errors::THRESHOLD_TOO_SMALL);
-            // Update the threshold and batch size.
-            self.legacy_threshold.write(threshold);
-            self.batch_size.write(new_batch_size);
-            self
-                .emit(
-                    ThresholdSet {
-                        old_threshold, new_threshold: threshold, old_batch_size, new_batch_size,
-                    },
-                );
-            // Send the legacy balance to L1 according to the new threshold.
+            self.batch_size.write(batch_size);
+            self.emit(BatchSizeSet { old_batch_size, new_batch_size: batch_size });
+            // Send legacy tokens to L1, if applicable given the new batch size.
             self.process_legacy_balance();
         }
 
@@ -181,9 +172,10 @@ pub mod TokenMigration {
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(get_contract_address());
             if legacy_balance > 0 {
-                self
-                    .send_legacy_amount_to_l1(
-                        starkgate_dispatcher: self.starkgate_dispatcher.read(),
+                // Send the entire legacy balance to L1 using StarkGate bridge.
+                let starkgate_dispatcher = self.starkgate_dispatcher.read();
+                starkgate_dispatcher
+                    .initiate_token_withdraw(
                         l1_token: self.l1_token_address.read(),
                         l1_recipient: self.l1_recipient.read(),
                         amount: legacy_balance,
@@ -253,40 +245,30 @@ pub mod TokenMigration {
                 );
         }
 
-        /// If the contract's balance of legacy tokens exceeds the legacy_threshold
-        /// legacy_token are withdrawn to L1 using StarkGate bridge, using fixed amounts.
+        /// Sends legacy token from the supplier to L1 recipient via StarkGate bridge.
+        /// Only the amount exceeding the legacy buffer may be sent.
+        /// The withdrawals on the bridge are done in fixed `batch_size` amounts.
+        /// E.g. If batch size is 100K, buffer is 350K and current balance is 700K, 3 withdrawals of
+        /// 100K will be performed.
         fn process_legacy_balance(ref self: ContractState) {
             assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             let legacy_token = self.legacy_token_dispatcher.read();
             let legacy_balance = legacy_token.balance_of(get_contract_address());
-            let threshold = self.legacy_threshold.read();
-            if legacy_balance < threshold {
+            let legacy_buffer = self.legacy_buffer.read();
+            let batch_size = self.batch_size.read();
+            if legacy_balance < (legacy_buffer + batch_size) {
                 return;
             }
-
-            let batch_size = self.batch_size.read();
-            let batch_count = min(legacy_balance / batch_size, MAX_BATCH_COUNT.into());
+            let available_balance = legacy_balance - legacy_buffer;
+            let batch_count = min(available_balance / batch_size, MAX_BATCH_COUNT.into());
             let starkgate_dispatcher = self.starkgate_dispatcher.read();
-            let l1_recipient = self.l1_recipient.read();
             let l1_token = self.l1_token_address.read();
+            let l1_recipient = self.l1_recipient.read();
             for _ in 0..batch_count {
-                self
-                    .send_legacy_amount_to_l1(
-                        :starkgate_dispatcher, :l1_token, :l1_recipient, amount: batch_size,
-                    );
+                // Send a single batch to L1 using StarkGate bridge.
+                starkgate_dispatcher
+                    .initiate_token_withdraw(:l1_token, :l1_recipient, amount: batch_size);
             }
-        }
-
-        /// Sends `amount` of legacy token to L1 using StarkGate bridge.
-        #[inline(always)]
-        fn send_legacy_amount_to_l1(
-            self: @ContractState,
-            starkgate_dispatcher: ITokenBridgeDispatcher,
-            l1_token: EthAddress,
-            l1_recipient: EthAddress,
-            amount: u256,
-        ) {
-            starkgate_dispatcher.initiate_token_withdraw(:l1_token, :l1_recipient, :amount);
         }
     }
 }

@@ -593,7 +593,7 @@ fn test_send_legacy_balance_to_l1_assertions() {
     let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 
-    // INSUFFICIENT_LEGACY_ALLOWANCE.
+    // INSUFFICIENT_SUPPLIER_ALLOWANCE.
     let token_supplier = cfg.token_supplier;
     let amount = INITIAL_CONTRACT_SUPPLY / 10;
     supply_contract(target: token_supplier, token: cfg.legacy_token, :amount);
@@ -605,7 +605,7 @@ fn test_send_legacy_balance_to_l1_assertions() {
         contract_address: token_migration_contract, caller_address: cfg.owner,
     );
     let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
-    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_LEGACY_ALLOWANCE);
+    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE);
 }
 
 #[test]

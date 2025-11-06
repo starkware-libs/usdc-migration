@@ -1,6 +1,6 @@
 use constants::{
-    INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_THRESHOLD,
-    OWNER_ADDRESS,
+    DECIMALS, INITIAL_CONTRACT_SUPPLY, INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS,
+    LEGACY_THRESHOLD, OWNER_ADDRESS,
 };
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
@@ -39,6 +39,7 @@ pub(crate) mod constants {
     // TODO: Change to the real value.
     pub const LEGACY_THRESHOLD: u256 = LARGE_BATCH_SIZE;
     pub const INITIAL_CONTRACT_SUPPLY: u256 = INITIAL_SUPPLY / 20;
+    pub const DECIMALS: u8 = 6;
     pub fn OWNER_ADDRESS() -> ContractAddress {
         'OWNER_ADDRESS'.try_into().unwrap()
     }
@@ -69,10 +70,18 @@ pub(crate) fn verify_l1_recipient(cfg: TokenMigrationCfg) {
 
 pub(crate) fn deploy_tokens(owner: ContractAddress) -> (Token, Token) {
     let legacy_config = TokenConfig {
-        name: "Legacy-Token", symbol: "Legacy-Token", initial_supply: INITIAL_SUPPLY, owner,
+        name: "Legacy-Token",
+        symbol: "Legacy-Token",
+        decimals: DECIMALS,
+        initial_supply: INITIAL_SUPPLY,
+        owner,
     };
     let new_config = TokenConfig {
-        name: "New-Token", symbol: "New-Token", initial_supply: INITIAL_SUPPLY, owner,
+        name: "New-Token",
+        symbol: "New-Token",
+        decimals: DECIMALS,
+        initial_supply: INITIAL_SUPPLY,
+        owner,
     };
     let legacy_state = legacy_config.deploy();
     let new_state = new_config.deploy();

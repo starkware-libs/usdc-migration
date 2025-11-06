@@ -118,7 +118,7 @@ pub mod TokenMigration {
     pub impl TokenMigrationImpl of ITokenMigration<ContractState> {
         fn swap_to_new(ref self: ContractState, amount: u256) {
             self
-                ._swap(
+                .swap(
                     from_token: self.legacy_token_dispatcher.read(),
                     to_token: self.new_token_dispatcher.read(),
                     :amount,
@@ -129,7 +129,7 @@ pub mod TokenMigration {
         fn swap_to_legacy(ref self: ContractState, amount: u256) {
             assert(self.can_swap_to_legacy(), Errors::REVERSE_SWAP_DISABLED);
             self
-                ._swap(
+                .swap(
                     from_token: self.new_token_dispatcher.read(),
                     to_token: self.legacy_token_dispatcher.read(),
                     :amount,
@@ -199,11 +199,6 @@ pub mod TokenMigration {
                         l1_recipient: self.l1_recipient.read(),
                         amount: legacy_balance,
                     );
-                // Contract should have zero balance of legacy token.
-                assert(
-                    legacy_token.balance_of(get_contract_address()).is_zero(),
-                    Errors::SEND_TO_L1_FAILED,
-                );
             }
         }
 
@@ -225,7 +220,7 @@ pub mod TokenMigration {
 
     #[generate_trait]
     impl TokenMigrationInternalImpl of TokenMigrationInternalTrait {
-        fn _swap(
+        fn swap(
             ref self: ContractState,
             from_token: IERC20Dispatcher,
             to_token: IERC20Dispatcher,
@@ -274,7 +269,7 @@ pub mod TokenMigration {
                 );
         }
 
-        /// Sends legacy token from the supplier to L1 recipient via StarkGate bridge.
+        /// Sends legacy token from the supplier to L1 recipient via StarkGate bridge if applicable.
         /// Only the amount exceeding the legacy buffer may be sent.
         /// The withdrawals on the bridge are done in fixed `batch_size` amounts.
         /// E.g. If batch size is 100K, buffer is 350K and current balance is 700K, 3 withdrawals of
@@ -297,6 +292,7 @@ pub mod TokenMigration {
                     :legacy_token, :token_supplier, amount: balance_to_send,
                 );
             if result.is_err() {
+                // TODO: Emit event?
                 return;
             }
             // Send the balance to L1 in batches.
@@ -308,11 +304,6 @@ pub mod TokenMigration {
                 starkgate_dispatcher
                     .initiate_token_withdraw(:l1_token, :l1_recipient, amount: batch_size);
             }
-            // Contract should have zero balance of legacy token.
-            assert(
-                legacy_token.balance_of(get_contract_address()).is_zero(),
-                Errors::SEND_TO_L1_FAILED,
-            );
         }
 
         /// Transfer `amount` of legacy token from the token supplier to the contract.
@@ -326,7 +317,7 @@ pub mod TokenMigration {
         ) -> Result<(), felt252> {
             let contract_address = get_contract_address();
             if amount > legacy_token.allowance(owner: token_supplier, spender: contract_address) {
-                return Err(Errors::INSUFFICIENT_LEGACY_ALLOWANCE);
+                return Err(Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE);
             }
             let balance_before = legacy_token.balance_of(contract_address);
             let success = legacy_token

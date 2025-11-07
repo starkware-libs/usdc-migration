@@ -795,4 +795,6 @@ fn test_set_batch_size_same_value() {
 
 // Flow: finalize setup flow.
 
+// Flow: config function before finalize setup.
+
 

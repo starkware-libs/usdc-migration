@@ -18,10 +18,12 @@ use token_migration::tests::test_utils::constants::{
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
     deploy_token_migration, finalize_setup, generic_test_fixture, new_user, set_batch_size,
-    supply_contract, verify_l1_recipient,
+    set_legacy_buffer, supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::WithdrawInitiated;
-use token_migration::token_migration::TokenMigration::{LARGE_BATCH_SIZE, SMALL_BATCH_SIZE};
+use token_migration::token_migration::TokenMigration::{
+    LARGE_BATCH_SIZE, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
+};
 
 #[test]
 fn test_swap_send_to_l1_multiple_sends() {
@@ -635,25 +637,157 @@ fn test_allow_swap_to_legacy_twice() {
         new_balance: INITIAL_SUPPLY + amount,
     );
 }
+
+#[test]
+fn test_set_legacy_buffer_flow() {
+    let cfg = generic_test_fixture();
+    let token_supplier = cfg.token_supplier;
+
+    let amount = LEGACY_BUFFER + LARGE_BATCH_SIZE - 2;
+    let user_0 = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_0, :amount);
+    assert_balances(
+        :cfg, account: token_supplier, legacy_balance: amount, new_balance: INITIAL_SUPPLY - amount,
+    );
+
+    set_legacy_buffer(:cfg, buffer: LEGACY_BUFFER + 2);
+
+    // Swap that does not trigger send to l1 (would have without the previous
+    // set_legacy_buffer).
+    let amount = 2;
+    let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_1, :amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER + LARGE_BATCH_SIZE,
+        new_balance: INITIAL_SUPPLY - (LEGACY_BUFFER + LARGE_BATCH_SIZE),
+    );
+
+    set_legacy_buffer(:cfg, buffer: LEGACY_BUFFER + 1);
+
+    // Swap that trigger send to l1 (would not have without the previous set_legacy_buffer).
+    let amount = 1;
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_2, :amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER + 1,
+        new_balance: INITIAL_SUPPLY - (LEGACY_BUFFER + LARGE_BATCH_SIZE + 1),
+    );
+}
+
+#[test]
+fn test_set_batch_size_flow() {
+    let cfg = generic_test_fixture();
+    let token_supplier = cfg.token_supplier;
+
+    let amount = LEGACY_BUFFER + SMALL_BATCH_SIZE - 1;
+    let user_0 = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_0, :amount);
+    assert_balances(
+        :cfg, account: token_supplier, legacy_balance: amount, new_balance: INITIAL_SUPPLY - amount,
+    );
+
+    set_batch_size(:cfg, batch_size: SMALL_BATCH_SIZE);
+
+    // Swap that trigger send to l1 (would not have without the previous set_batch_size).
+    let amount = 1;
+    let user_1 = new_user(id: 1, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_1, :amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - (LEGACY_BUFFER + SMALL_BATCH_SIZE),
+    );
+
+    set_batch_size(:cfg, batch_size: LARGE_BATCH_SIZE);
+
+    // Swap that does not trigger send to l1 (would have without the previous
+    // set_batch_size).
+    let amount = SMALL_BATCH_SIZE + 1;
+    let user_2 = new_user(id: 2, token: cfg.legacy_token, initial_balance: amount);
+    approve_and_swap_to_new(:cfg, user: user_2, :amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER + amount,
+        new_balance: INITIAL_SUPPLY - (LEGACY_BUFFER + SMALL_BATCH_SIZE + amount),
+    );
+}
+
+#[test]
+fn test_set_legacy_buffer_same_value() {
+    let cfg = generic_test_fixture();
+    let token_supplier = cfg.token_supplier;
+
+    let amount = LEGACY_BUFFER + LARGE_BATCH_SIZE;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount * 2);
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - amount,
+    );
+
+    // Set the same value as the current.
+    set_legacy_buffer(:cfg, buffer: LEGACY_BUFFER);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - amount,
+    );
+
+    let amount_2 = XL_BATCH_SIZE;
+    supply_contract(target: token_supplier, token: cfg.legacy_token, amount: amount_2);
+    approve_and_swap_to_new(:cfg, :user, amount: amount_2);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - (amount + amount_2),
+    );
+}
+
+#[test]
+fn test_set_batch_size_same_value() {
+    let cfg = generic_test_fixture();
+    let token_supplier = cfg.token_supplier;
+
+    let amount = LEGACY_BUFFER + LARGE_BATCH_SIZE;
+    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount * 2);
+    approve_and_swap_to_new(:cfg, :user, :amount);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - amount,
+    );
+
+    // Set the same value as the current.
+    set_batch_size(:cfg, batch_size: LARGE_BATCH_SIZE);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - amount,
+    );
+
+    let amount_2 = LARGE_BATCH_SIZE;
+    supply_contract(target: token_supplier, token: cfg.legacy_token, amount: amount_2);
+    approve_and_swap_to_new(:cfg, :user, amount: amount_2);
+    assert_balances(
+        :cfg,
+        account: token_supplier,
+        legacy_balance: LEGACY_BUFFER,
+        new_balance: INITIAL_SUPPLY - (amount + amount_2),
+    );
+}
 // TODO: Implement these tests.
-
-// Flow: set_legacy_buffer to amount that triggers send to l1, set_legacy_buffer to
-// amount that does not trigger send to l1.
-
-// Flow: set_batch_size to amount that triggers send to l1,
-// set_batch_size to amount that does not trigger send to l1.
-
-// Flow: set_legacy_buffer, swap that triggers send to l1, test balances,
-// set_legacy_buffer, swap that does not trigger send to l1 (and would trigger without
-// privious set), test balances, opposite direction.
-
-// Flow: set_batch_size, swap that triggers send to l1, test balances and batch sizes,
-// set_batch_size, swap that does not trigger send to l1 (and would trigger without privious set),
-// test balances, opposite direction.
-
-// Flow: set_legacy_buffer to the same value as the current.
-
-// Flow: set_batch_size to the same value as the current.
 
 // Flow: finalize setup with wrong token_supplier.
 

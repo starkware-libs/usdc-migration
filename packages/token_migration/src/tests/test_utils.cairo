@@ -65,7 +65,7 @@ pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
     cfg
 }
 
-fn init_token_supplier(cfg: TokenMigrationCfg) {
+pub(crate) fn init_token_supplier(cfg: TokenMigrationCfg) {
     supply_contract(target: cfg.token_supplier, token: cfg.new_token, amount: INITIAL_SUPPLY);
     let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
     cheat_caller_address_once(
@@ -236,6 +236,14 @@ pub(crate) fn set_batch_size(cfg: TokenMigrationCfg, batch_size: u256) {
     );
     ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
         .set_batch_size(:batch_size);
+}
+
+pub(crate) fn send_legacy_balance_to_l1(cfg: TokenMigrationCfg) {
+    cheat_caller_address_once(
+        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
+    );
+    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
+        .send_legacy_balance_to_l1();
 }
 
 pub(crate) fn assert_balances(

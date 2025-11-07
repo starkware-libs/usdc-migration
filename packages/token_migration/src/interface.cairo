@@ -31,7 +31,7 @@ pub trait ITokenMigrationAdmin<T> {
     /// Sends the entire legacy token balance to the L1 recipient.
     /// Caller must be the owner.
     fn send_legacy_balance_to_l1(ref self: T);
-    /// Enable / disable reverse swap (new tokens for legacy tokens).
+    /// Enables / disables reverse swap (new tokens for legacy tokens).
     /// Caller must be the owner.
     fn allow_swap_to_legacy(ref self: T, allow_swap: bool);
 }

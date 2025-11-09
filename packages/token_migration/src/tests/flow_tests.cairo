@@ -17,9 +17,8 @@ use token_migration::tests::test_utils::constants::{
 };
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
-    deploy_token_migration, finalize_setup, generic_load, generic_test_fixture, init_token_supplier,
-    new_user, send_legacy_balance_to_l1, set_batch_size, set_legacy_buffer, supply_contract,
-    verify_l1_recipient,
+    deploy_token_migration, generic_load, generic_test_fixture, init_token_supplier, new_user,
+    set_batch_size, set_legacy_buffer, set_token_supplier, supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::WithdrawInitiated;
 use token_migration::token_migration::TokenMigration::{
@@ -120,7 +119,7 @@ fn test_flow_user_swap_fail_then_succeed() {
     let cfg = deploy_token_migration();
     verify_l1_recipient(:cfg);
     let token_supplier = TOKEN_SUPPLIER();
-    finalize_setup(:cfg, :token_supplier);
+    set_token_supplier(:cfg, :token_supplier);
     let amount = INITIAL_SUPPLY / 100;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: 0);
     let migration_contract = cfg.token_migration_contract;
@@ -279,43 +278,6 @@ fn end_to_end_swap_send_to_l1_test() {
         new_balance: Zero::zero(),
     );
     assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount * 2);
-}
-
-#[test]
-#[feature("safe_dispatcher")]
-fn reverse_swap_fail_after_send_legacy_balance_to_l1() {
-    let cfg = generic_test_fixture();
-    let token_migration_contract = cfg.token_migration_contract;
-    let migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
-        contract_address: token_migration_contract,
-    };
-    let new_dispatcher = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
-    let token_supplier = cfg.token_supplier;
-
-    let amount = INITIAL_SUPPLY - 5;
-    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
-    approve_and_swap_to_new(:cfg, :user, :amount);
-    let contract_legacy_balance = LEGACY_BUFFER + (amount - LEGACY_BUFFER) % LARGE_BATCH_SIZE;
-    assert_balances(
-        :cfg, account: token_supplier, legacy_balance: contract_legacy_balance, new_balance: 5,
-    );
-
-    // Send all legacy to L1.
-    send_legacy_balance_to_l1(:cfg);
-    assert_balances(:cfg, account: token_supplier, legacy_balance: Zero::zero(), new_balance: 5);
-
-    // Reverse swap should fail.
-    cheat_caller_address_once(
-        contract_address: new_dispatcher.contract_address, caller_address: user,
-    );
-    new_dispatcher.approve(spender: token_migration_contract, amount: 1);
-    cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
-    let result = migration_safe_dispatcher.swap_to_legacy(amount: 1);
-    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_SUPPLIER_BALANCE);
-
-    // Check balances.
-    assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
-    assert_balances(:cfg, account: token_supplier, legacy_balance: Zero::zero(), new_balance: 5);
 }
 
 #[test]
@@ -607,7 +569,7 @@ fn test_allow_swap_to_legacy_twice() {
     // Set to false twice and try to swap.
     allow_swap_to_legacy(:cfg, allow_swap: false);
     allow_swap_to_legacy(:cfg, allow_swap: false);
-    assert!(!token_migration.can_swap_to_legacy());
+    assert!(!token_migration.is_swap_to_legacy_allowed());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let result = token_migration_safe.swap_to_legacy(:amount);
     assert_panic_with_felt_error(:result, expected_error: Errors::REVERSE_SWAP_DISABLED);
@@ -621,7 +583,7 @@ fn test_allow_swap_to_legacy_twice() {
     // Set to true twice and swap.
     allow_swap_to_legacy(:cfg, allow_swap: true);
     allow_swap_to_legacy(:cfg, allow_swap: true);
-    assert!(token_migration.can_swap_to_legacy());
+    assert!(token_migration.is_swap_to_legacy_allowed());
     approve_and_swap_to_legacy(:cfg, :user, :amount);
 
     // Check balances.
@@ -786,14 +748,14 @@ fn test_set_batch_size_same_value() {
 
 #[test]
 #[feature("safe_dispatcher")]
-fn test_finalize_setup_with_wrong_token_supplier() {
+fn test_set_token_supplier_with_wrong_address() {
     let cfg = generic_test_fixture();
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_safe_dispatcher = ITokenMigrationSafeDispatcher {
         contract_address: token_migration_contract,
     };
     let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
-    finalize_setup(:cfg, token_supplier: 'NOT_TOKEN_SUPPLIER'.try_into().unwrap());
+    set_token_supplier(:cfg, token_supplier: 'NOT_TOKEN_SUPPLIER'.try_into().unwrap());
     let amount = 1;
     let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
     cheat_caller_address_once(
@@ -806,7 +768,7 @@ fn test_finalize_setup_with_wrong_token_supplier() {
 }
 
 #[test]
-fn test_finalize_setup_twice_with_different_token_supplier() {
+fn test_set_token_supplier_twice_with_different_address() {
     let mut cfg = generic_test_fixture();
     let token_supplier = cfg.token_supplier;
 
@@ -820,7 +782,7 @@ fn test_finalize_setup_twice_with_different_token_supplier() {
 
     let new_token_supplier: ContractAddress = 'NEW_TOKEN_SUPPLIER'.try_into().unwrap();
     cfg.token_supplier = new_token_supplier;
-    finalize_setup(:cfg, token_supplier: new_token_supplier);
+    set_token_supplier(:cfg, token_supplier: new_token_supplier);
     init_token_supplier(:cfg);
 
     approve_and_swap_to_new(:cfg, :user, :amount);
@@ -838,7 +800,7 @@ fn test_finalize_setup_twice_with_different_token_supplier() {
 
 #[test]
 #[feature("safe_dispatcher")]
-fn test_config_functions_before_finalize_setup() {
+fn test_config_functions_before_set_token_supplier() {
     let mut cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
     let token_migration_dispatcher = ITokenMigrationDispatcher {
@@ -859,16 +821,13 @@ fn test_config_functions_before_finalize_setup() {
     assert!(generic_load(cfg.token_migration_contract, selector!("batch_size")) == batch_size);
 
     allow_swap_to_legacy(:cfg, allow_swap: false);
-    assert!(!token_migration_dispatcher.can_swap_to_legacy());
-
-    // Should do nothing.
-    send_legacy_balance_to_l1(:cfg);
+    assert!(!token_migration_dispatcher.is_swap_to_legacy_allowed());
 
     // Finalize setup.
     cfg.token_supplier = TOKEN_SUPPLIER();
     init_token_supplier(:cfg);
     verify_l1_recipient(:cfg);
-    finalize_setup(:cfg, token_supplier: cfg.token_supplier);
+    set_token_supplier(:cfg, token_supplier: cfg.token_supplier);
 
     // Swap should trigger sending to l1 according to the new buffer and batch size.
     let amount = legacy_buffer + batch_size;

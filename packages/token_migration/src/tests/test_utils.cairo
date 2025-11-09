@@ -61,7 +61,7 @@ pub(crate) fn generic_test_fixture() -> TokenMigrationCfg {
     cfg.token_supplier = TOKEN_SUPPLIER();
     init_token_supplier(:cfg);
     verify_l1_recipient(:cfg);
-    finalize_setup(:cfg, token_supplier: cfg.token_supplier);
+    set_token_supplier(:cfg, token_supplier: cfg.token_supplier);
     cfg
 }
 
@@ -214,12 +214,12 @@ pub(crate) fn allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_swap: bool) {
         .allow_swap_to_legacy(:allow_swap);
 }
 
-pub(crate) fn finalize_setup(cfg: TokenMigrationCfg, token_supplier: ContractAddress) {
+pub(crate) fn set_token_supplier(cfg: TokenMigrationCfg, token_supplier: ContractAddress) {
     cheat_caller_address_once(
         contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
     );
     ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
-        .finalize_setup(:token_supplier);
+        .set_token_supplier(:token_supplier);
 }
 
 pub(crate) fn set_legacy_buffer(cfg: TokenMigrationCfg, buffer: u256) {
@@ -236,14 +236,6 @@ pub(crate) fn set_batch_size(cfg: TokenMigrationCfg, batch_size: u256) {
     );
     ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
         .set_batch_size(:batch_size);
-}
-
-pub(crate) fn send_legacy_balance_to_l1(cfg: TokenMigrationCfg) {
-    cheat_caller_address_once(
-        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
-    );
-    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
-        .send_legacy_balance_to_l1();
 }
 
 pub(crate) fn assert_balances(

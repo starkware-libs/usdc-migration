@@ -15,7 +15,8 @@ pub mod TokenMigration {
     use starkware_utils::span::contains;
     use token_migration::errors::Errors;
     use token_migration::events::TokenMigrationEvents::{
-        BatchSizeSet, L1RecipientVerified, LegacyBufferSet, TokenMigrated, TokenSupplierSet,
+        BatchSizeSet, L1RecipientVerified, LegacyBufferSet, SendToL1Failed, TokenMigrated,
+        TokenSupplierSet,
     };
     use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
     use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
@@ -75,6 +76,7 @@ pub mod TokenMigration {
         TokenSupplierSet: TokenSupplierSet,
         LegacyBufferSet: LegacyBufferSet,
         BatchSizeSet: BatchSizeSet,
+        SendToL1Failed: SendToL1Failed,
     }
 
     #[constructor]
@@ -298,7 +300,7 @@ pub mod TokenMigration {
                     :legacy_token, :token_supplier, amount: balance_to_send,
                 );
             if result.is_err() {
-                // TODO: Emit event?
+                self.emit(SendToL1Failed { error: result.unwrap_err() });
                 return;
             }
 

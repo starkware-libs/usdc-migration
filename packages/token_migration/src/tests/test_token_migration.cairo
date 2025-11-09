@@ -18,7 +18,8 @@ use starkware_utils_testing::test_utils::{
 };
 use token_migration::errors::Errors;
 use token_migration::events::TokenMigrationEvents::{
-    BatchSizeSet, L1RecipientVerified, LegacyBufferSet, TokenMigrated, TokenSupplierSet,
+    BatchSizeSet, L1RecipientVerified, LegacyBufferSet, SendToL1Failed, TokenMigrated,
+    TokenSupplierSet,
 };
 use token_migration::interface::{
     ITokenMigrationAdminSafeDispatcher, ITokenMigrationAdminSafeDispatcherTrait,
@@ -194,9 +195,24 @@ fn test_set_legacy_buffer_send_to_l1_fail() {
     let legacy_amount = new_buffer + LARGE_BATCH_SIZE;
     supply_contract(target: token_supplier, token: cfg.legacy_token, amount: legacy_amount);
     // set_batch_size should work without sending to l1.
+    let mut spy = spy_events();
     set_legacy_buffer(:cfg, buffer: new_buffer);
     assert_balances(
         :cfg, account: token_supplier, legacy_balance: legacy_amount, new_balance: INITIAL_SUPPLY,
+    );
+    let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 2, message: "set_legacy_buffer");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: LegacyBufferSet { old_buffer: LEGACY_BUFFER, new_buffer: new_buffer },
+        expected_event_selector: @selector!("LegacyBufferSet"),
+        expected_event_name: "LegacyBufferSet",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[1],
+        expected_event: SendToL1Failed { error: Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE },
+        expected_event_selector: @selector!("SendToL1Failed"),
+        expected_event_name: "SendToL1Failed",
     );
     // Sufficient allowance for contract to transfer from supplier.
     cheat_caller_address_once(
@@ -357,9 +373,26 @@ fn test_set_batch_size_send_to_l1_fail() {
     let legacy_amount = LEGACY_BUFFER + SMALL_BATCH_SIZE;
     supply_contract(target: token_supplier, token: cfg.legacy_token, amount: legacy_amount);
     // set_batch_size should work without sending to l1.
+    let mut spy = spy_events();
     set_batch_size(:cfg, batch_size: SMALL_BATCH_SIZE);
     assert_balances(
         :cfg, account: token_supplier, legacy_balance: legacy_amount, new_balance: INITIAL_SUPPLY,
+    );
+    let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 2, message: "set_batch_size");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: BatchSizeSet {
+            old_batch_size: LARGE_BATCH_SIZE, new_batch_size: SMALL_BATCH_SIZE,
+        },
+        expected_event_selector: @selector!("BatchSizeSet"),
+        expected_event_name: "BatchSizeSet",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[1],
+        expected_event: SendToL1Failed { error: Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE },
+        expected_event_selector: @selector!("SendToL1Failed"),
+        expected_event_name: "SendToL1Failed",
     );
     // Sufficient allowance for contract to transfer from supplier.
     cheat_caller_address_once(
@@ -531,10 +564,30 @@ fn test_swap_to_new_send_to_l1_fail() {
     );
     legacy_dispatcher.approve(spender: token_migration_contract, amount: 2 * LARGE_BATCH_SIZE - 1);
     // Swap should work without sending to l1.
+    let mut spy = spy_events();
     approve_and_swap_to_new(:cfg, :user, :amount);
     assert_balances(:cfg, account: user, legacy_balance: Zero::zero(), new_balance: amount);
     assert_balances(
         :cfg, account: token_supplier, legacy_balance: amount, new_balance: INITIAL_SUPPLY - amount,
+    );
+    let events = spy.get_events().emitted_by(contract_address: token_migration_contract).events;
+    assert_number_of_events(actual: events.len(), expected: 2, message: "swap_to_new");
+    assert_expected_event_emitted(
+        spied_event: events[0],
+        expected_event: TokenMigrated {
+            user,
+            from_token: cfg.legacy_token.contract_address(),
+            to_token: cfg.new_token.contract_address(),
+            amount,
+        },
+        expected_event_selector: @selector!("TokenMigrated"),
+        expected_event_name: "TokenMigrated",
+    );
+    assert_expected_event_emitted(
+        spied_event: events[1],
+        expected_event: SendToL1Failed { error: Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE },
+        expected_event_selector: @selector!("SendToL1Failed"),
+        expected_event_name: "SendToL1Failed",
     );
     // Sufficient allowance for contract to transfer from supplier.
     cheat_caller_address_once(

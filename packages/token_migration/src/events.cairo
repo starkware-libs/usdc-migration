@@ -33,4 +33,9 @@ pub mod TokenMigrationEvents {
         pub old_batch_size: u256,
         pub new_batch_size: u256,
     }
+
+    #[derive(Drop, starknet::Event, Debug, PartialEq)]
+    pub struct SendToL1Failed {
+        pub error: felt252,
+    }
 }

@@ -248,18 +248,16 @@ pub mod TokenMigration {
             );
 
             // Swap `amount` of legacy token for new token.
-            // TODO: Remove success check?
-            let balance_before = from_token.balance_of(token_supplier);
-            let success = from_token
-                .transfer_from(sender: user, recipient: token_supplier, :amount);
+            let from_balance_before = from_token.balance_of(token_supplier);
+            from_token.transfer_from(sender: user, recipient: token_supplier, :amount);
             assert(
-                success && balance_before + amount == from_token.balance_of(token_supplier),
+                from_balance_before + amount == from_token.balance_of(token_supplier),
                 Errors::TRANSFER_FROM_CALLER_FAILED,
             );
-            let balance_before = to_token.balance_of(token_supplier);
-            let success = to_token.transfer_from(sender: token_supplier, recipient: user, :amount);
+            let to_balance_before = to_token.balance_of(token_supplier);
+            to_token.transfer_from(sender: token_supplier, recipient: user, :amount);
             assert(
-                success && balance_before - amount == to_token.balance_of(token_supplier),
+                to_balance_before - amount == to_token.balance_of(token_supplier),
                 Errors::TRANSFER_TO_CALLER_FAILED,
             );
 
@@ -328,11 +326,10 @@ pub mod TokenMigration {
             if amount > legacy_token.allowance(owner: token_supplier, spender: contract_address) {
                 return Err(Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE);
             }
-            // TODO: Remove success check?
             let balance_before = legacy_token.balance_of(contract_address);
-            let success = legacy_token
+            legacy_token
                 .transfer_from(sender: token_supplier, recipient: contract_address, :amount);
-            if !success || balance_before + amount != legacy_token.balance_of(contract_address) {
+            if balance_before + amount != legacy_token.balance_of(contract_address) {
                 return Err(Errors::TRANSFER_FROM_SUPPLIER_FAILED);
             }
             Ok(())

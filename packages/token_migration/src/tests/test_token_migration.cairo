@@ -33,8 +33,8 @@ use token_migration::tests::test_utils::constants::{
 use token_migration::tests::test_utils::{
     allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
     deploy_mock_bridge, deploy_token_migration, deploy_tokens, finalize_setup, generic_load,
-    generic_test_fixture, new_user, send_legacy_balance_to_l1, set_batch_size, set_legacy_buffer,
-    supply_contract, verify_l1_recipient,
+    generic_test_fixture, new_user, set_batch_size, set_legacy_buffer, supply_contract,
+    verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait, WithdrawInitiated,
@@ -606,77 +606,6 @@ fn test_swap_to_new_send_to_l1_fail() {
 }
 
 #[test]
-fn test_send_legacy_balance_to_l1() {
-    let cfg = generic_test_fixture();
-    let amount = LEGACY_BUFFER + LARGE_BATCH_SIZE - 1;
-    let user = new_user(id: 0, token: cfg.legacy_token, initial_balance: amount);
-    let legacy_dispatcher = IERC20Dispatcher {
-        contract_address: cfg.legacy_token.contract_address(),
-    };
-
-    // Send zero legacy balance to l1.
-    send_legacy_balance_to_l1(:cfg);
-
-    // Assert balances.
-    assert_balances(
-        :cfg,
-        account: cfg.token_supplier,
-        legacy_balance: Zero::zero(),
-        new_balance: INITIAL_SUPPLY,
-    );
-
-    // Swap without triggering send to l1.
-    approve_and_swap_to_new(:cfg, :user, :amount);
-    assert_eq!(legacy_dispatcher.balance_of(cfg.token_supplier), amount);
-
-    // Send balance to l1.
-    send_legacy_balance_to_l1(:cfg);
-
-    // Assert balances.
-    assert_balances(
-        :cfg,
-        account: cfg.token_supplier,
-        legacy_balance: Zero::zero(),
-        new_balance: INITIAL_SUPPLY - amount,
-    );
-    assert_balances(
-        :cfg,
-        account: cfg.token_migration_contract,
-        legacy_balance: Zero::zero(),
-        new_balance: Zero::zero(),
-    );
-}
-
-#[test]
-#[feature("safe_dispatcher")]
-fn test_send_legacy_balance_to_l1_assertions() {
-    let cfg = generic_test_fixture();
-    let token_migration_contract = cfg.token_migration_contract;
-    let token_migration_admin_safe_dispatcher = ITokenMigrationAdminSafeDispatcher {
-        contract_address: token_migration_contract,
-    };
-    let legacy_token = IERC20Dispatcher { contract_address: cfg.legacy_token.contract_address() };
-
-    // Catch only owner.
-    let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
-    assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
-
-    // INSUFFICIENT_SUPPLIER_ALLOWANCE.
-    let token_supplier = cfg.token_supplier;
-    let amount = INITIAL_SUPPLY / 10;
-    supply_contract(target: token_supplier, token: cfg.legacy_token, :amount);
-    cheat_caller_address_once(
-        contract_address: legacy_token.contract_address, caller_address: token_supplier,
-    );
-    legacy_token.approve(spender: token_migration_contract, amount: Zero::zero());
-    cheat_caller_address_once(
-        contract_address: token_migration_contract, caller_address: cfg.owner,
-    );
-    let result = token_migration_admin_safe_dispatcher.send_legacy_balance_to_l1();
-    assert_panic_with_felt_error(:result, expected_error: Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE);
-}
-
-#[test]
 fn test_finalize_setup() {
     let cfg = deploy_token_migration();
     let token_migration_contract = cfg.token_migration_contract;
@@ -1027,7 +956,7 @@ fn test_allow_swap_to_legacy() {
     };
 
     // Check reverse swap is allowed by default.
-    assert!(token_migration.can_swap_to_legacy());
+    assert!(token_migration.is_swap_to_legacy_allowed());
 
     // Supply contract and create user.
     let amount = INITIAL_SUPPLY / 10;
@@ -1048,7 +977,7 @@ fn test_allow_swap_to_legacy() {
 
     // Set to false and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: false);
-    assert!(!token_migration.can_swap_to_legacy());
+    assert!(!token_migration.is_swap_to_legacy_allowed());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe.swap_to_legacy(amount: amount / 2);
     assert_panic_with_felt_error(result: res, expected_error: Errors::REVERSE_SWAP_DISABLED);
@@ -1064,7 +993,7 @@ fn test_allow_swap_to_legacy() {
 
     // Set to true and try to swap to legacy again.
     allow_swap_to_legacy(:cfg, allow_swap: true);
-    assert!(token_migration.can_swap_to_legacy());
+    assert!(token_migration.is_swap_to_legacy_allowed());
     approve_and_swap_to_legacy(:cfg, :user, amount: amount / 2);
 
     // Check balances.

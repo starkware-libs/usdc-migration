@@ -238,14 +238,6 @@ pub(crate) fn set_batch_size(cfg: TokenMigrationCfg, batch_size: u256) {
         .set_batch_size(:batch_size);
 }
 
-pub(crate) fn send_legacy_balance_to_l1(cfg: TokenMigrationCfg) {
-    cheat_caller_address_once(
-        contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
-    );
-    ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
-        .send_legacy_balance_to_l1();
-}
-
 pub(crate) fn assert_balances(
     cfg: TokenMigrationCfg, account: ContractAddress, legacy_balance: u256, new_balance: u256,
 ) {

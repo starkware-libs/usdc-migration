@@ -128,7 +128,6 @@ pub mod TokenMigration {
                     to_token: self.new_token_dispatcher.read(),
                     :amount,
                 );
-            self.process_legacy_balance();
         }
 
         fn swap_to_legacy(ref self: ContractState, amount: u256) {
@@ -158,7 +157,6 @@ pub mod TokenMigration {
     pub impl AdminFunctions of ITokenMigrationAdmin<ContractState> {
         fn set_token_supplier(ref self: ContractState, token_supplier: ContractAddress) {
             self.ownable.assert_only_owner();
-            assert(self.l1_recipient_verified.read(), Errors::L1_RECIPIENT_NOT_VERIFIED);
             self.token_supplier.write(token_supplier);
             self.emit(TokenSupplierSet { token_supplier });
         }
@@ -168,8 +166,6 @@ pub mod TokenMigration {
             let old_buffer = self.legacy_buffer.read();
             self.legacy_buffer.write(buffer);
             self.emit(LegacyBufferSet { old_buffer, new_buffer: buffer });
-            // Send legacy tokens to L1, if applicable given the new buffer size.
-            self.process_legacy_balance();
         }
 
         fn set_batch_size(ref self: ContractState, batch_size: u256) {
@@ -178,23 +174,11 @@ pub mod TokenMigration {
             let old_batch_size = self.batch_size.read();
             self.batch_size.write(batch_size);
             self.emit(BatchSizeSet { old_batch_size, new_batch_size: batch_size });
-            // Send legacy tokens to L1, if applicable given the new batch size.
-            self.process_legacy_balance();
         }
 
         fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
             self.ownable.assert_only_owner();
             self.allow_swap_to_legacy.write(allow_swap);
-        }
-    }
-
-    /// Verify the L1 recipient address provided in the constructor is a controlled address.
-    #[l1_handler]
-    fn verify_l1_recipient(ref self: ContractState, from_address: felt252) {
-        let l1_recipient = self.l1_recipient.read();
-        if from_address.try_into().unwrap() == l1_recipient {
-            self.l1_recipient_verified.write(true);
-            self.emit(L1RecipientVerified { l1_recipient });
         }
     }
 
@@ -247,55 +231,6 @@ pub mod TokenMigration {
                         amount,
                     },
                 );
-        }
-
-        /// Sends legacy token from the supplier to L1 recipient via StarkGate bridge if applicable.
-        /// Only the amount exceeding the legacy buffer may be sent.
-        /// The withdrawals on the bridge are done in fixed `batch_size` amounts.
-        /// E.g. If batch size is 100K, buffer is 350K and current balance is 700K, 3 withdrawals of
-        /// 100K will be performed.
-        fn process_legacy_balance(ref self: ContractState) {
-            let legacy_token = self.legacy_token_dispatcher.read();
-            let token_supplier = self.token_supplier.read();
-            let legacy_buffer = self.legacy_buffer.read();
-            let batch_size = self.batch_size.read();
-
-            let legacy_balance = legacy_token.balance_of(token_supplier);
-            if legacy_balance < (legacy_buffer + batch_size) {
-                return;
-            }
-            let batch_count = min(
-                (legacy_balance - legacy_buffer) / batch_size, MAX_BATCH_COUNT.into(),
-            );
-            let balance_to_send = batch_size * batch_count;
-
-            // Transfer the balance from the token supplier to the contract.
-            let contract_address = get_contract_address();
-            let supplier_allowance = legacy_token
-                .allowance(owner: token_supplier, spender: contract_address);
-            if supplier_allowance < balance_to_send {
-                self.emit(SendToL1Failed { error: Errors::INSUFFICIENT_SUPPLIER_ALLOWANCE });
-                return;
-            }
-            let balance_before = legacy_token.balance_of(contract_address);
-            legacy_token
-                .transfer_from(
-                    sender: token_supplier, recipient: contract_address, amount: balance_to_send,
-                );
-            if balance_before + balance_to_send != legacy_token.balance_of(contract_address) {
-                self.emit(SendToL1Failed { error: Errors::TRANSFER_FROM_SUPPLIER_FAILED });
-                return;
-            }
-
-            // Send the balance to L1 in batches.
-            let starkgate_dispatcher = self.starkgate_dispatcher.read();
-            let l1_token = self.l1_token_address.read();
-            let l1_recipient = self.l1_recipient.read();
-            for _ in 0..batch_count {
-                // Send a single batch to L1 using StarkGate bridge.
-                starkgate_dispatcher
-                    .initiate_token_withdraw(:l1_token, :l1_recipient, amount: batch_size);
-            }
         }
     }
 }

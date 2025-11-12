@@ -28,7 +28,7 @@ This contract aims to aid starknet users in migrating their USDC.e tokens into U
 ### View Functions
 - `get_legacy_token() -> ContractAddress` - Get the `ContractAddress` of the legacy token.
 - `get_new_token() -> ContractAddress` - Get the `ContractAddress` of the new token.
-- `can_swap_to_legacy() -> bool` - Check if exchanging new tokens for legacy tokens (reverse migration) is allowed.
+- `is_swap_to_legacy_allowed() -> bool` - Check if exchanging new tokens for legacy tokens (reverse migration) is allowed.
 
 ### Migration Functions
 - `swap_to_new(amount: u256)` - Exchange legacy tokens for new ones (1:1 ratio).

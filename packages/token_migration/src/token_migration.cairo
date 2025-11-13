@@ -17,7 +17,9 @@ pub mod TokenMigration {
         BatchSizeSet, L1RecipientVerified, LegacyBufferSet, SendToL1Failed, TokenMigrated,
         TokenSupplierSet,
     };
-    use token_migration::interface::{ITokenMigration, ITokenMigrationAdmin};
+    use token_migration::interface::{
+        ITokenMigration, ITokenMigrationAdmin, ITokenMigrationStarkGate,
+    };
     use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
@@ -185,6 +187,19 @@ pub mod TokenMigration {
         fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
             self.ownable.assert_only_owner();
             self.allow_swap_to_legacy.write(allow_swap);
+        }
+    }
+
+    #[abi(embed_v0)]
+    pub impl StarkGateFunctions of ITokenMigrationStarkGate<ContractState> {
+        fn get_new_token_supply(self: @ContractState) -> u256 {
+            let token_supplier = self.token_supplier.read();
+            let new_token = self.new_token_dispatcher.read();
+            let token_supplier_balance = new_token.balance_of(token_supplier);
+            let token_supplier_allowance = new_token
+                .allowance(owner: token_supplier, spender: get_contract_address());
+
+            min(token_supplier_balance, token_supplier_allowance)
         }
     }
 

@@ -33,3 +33,9 @@ pub trait ITokenMigrationAdmin<T> {
     /// Caller must be the owner.
     fn allow_swap_to_legacy(ref self: T, allow_swap: bool);
 }
+
+#[starknet::interface]
+pub trait ITokenMigrationStarkGate<T> {
+    /// Returns the amount of new tokens available for swapping.
+    fn get_new_token_supply(self: @T) -> u256;
+}

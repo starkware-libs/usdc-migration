@@ -7,9 +7,10 @@ use openzeppelin::upgrades::interface::{
     IUpgradeableSafeDispatcherTrait,
 };
 use openzeppelin::upgrades::upgradeable::UpgradeableComponent::Errors as UpgradeableErrors;
+use starkware_utils::constants::MAX_U256;
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, L1HandlerTrait,
-    TokenTrait, spy_events,
+    TokenTrait, set_balance, spy_events,
 };
 use starknet::{ContractAddress, EthAddress};
 use starkware_utils_testing::event_test_utils::assert_number_of_events;
@@ -24,7 +25,8 @@ use token_migration::events::TokenMigrationEvents::{
 use token_migration::interface::{
     ITokenMigrationAdminSafeDispatcher, ITokenMigrationAdminSafeDispatcherTrait,
     ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait, ITokenMigrationSafeDispatcher,
-    ITokenMigrationSafeDispatcherTrait,
+    ITokenMigrationSafeDispatcherTrait, ITokenMigrationStarkGateDispatcher,
+    ITokenMigrationStarkGateDispatcherTrait,
 };
 use token_migration::starkgate_interface::{ITokenBridgeDispatcher, ITokenBridgeDispatcherTrait};
 use token_migration::tests::test_utils::constants::{
@@ -1037,3 +1039,44 @@ fn test_token_getters() {
     assert_eq!(token_migration.get_new_token(), new_token_address);
 }
 
+#[test]
+fn test_get_new_token_supply() {
+    let cfg = generic_test_fixture();
+    let starkgate_functions = ITokenMigrationStarkGateDispatcher {
+        contract_address: cfg.token_migration_contract,
+    };
+    let new_token = IERC20Dispatcher { contract_address: cfg.new_token.contract_address() };
+
+    // Test initial supply.
+    assert_eq!(starkgate_functions.get_new_token_supply(), INITIAL_SUPPLY);
+
+    // Add supply with infinite allowance.
+    supply_contract(target: cfg.token_supplier, token: cfg.new_token, amount: INITIAL_SUPPLY);
+    assert_eq!(starkgate_functions.get_new_token_supply(), INITIAL_SUPPLY * 2);
+
+    // Reduce allowance and test.
+    cheat_caller_address_once(
+        contract_address: new_token.contract_address, caller_address: cfg.token_supplier,
+    );
+    new_token.approve(spender: cfg.token_migration_contract, amount: INITIAL_SUPPLY);
+    assert_eq!(starkgate_functions.get_new_token_supply(), INITIAL_SUPPLY);
+
+    // Reduce supply and test.
+    set_balance(target: cfg.token_supplier, new_balance: INITIAL_SUPPLY / 2, token: cfg.new_token);
+    assert_eq!(starkgate_functions.get_new_token_supply(), INITIAL_SUPPLY / 2);
+
+    // Zero allowance and test.
+    cheat_caller_address_once(
+        contract_address: new_token.contract_address, caller_address: cfg.token_supplier,
+    );
+    new_token.approve(spender: cfg.token_migration_contract, amount: Zero::zero());
+    assert_eq!(starkgate_functions.get_new_token_supply(), Zero::zero());
+
+    // Zero supply, infinite allowance and test.
+    cheat_caller_address_once(
+        contract_address: new_token.contract_address, caller_address: cfg.token_supplier,
+    );
+    new_token.approve(spender: cfg.token_migration_contract, amount: MAX_U256);
+    set_balance(target: cfg.token_supplier, new_balance: Zero::zero(), token: cfg.new_token);
+    assert_eq!(starkgate_functions.get_new_token_supply(), Zero::zero());
+}

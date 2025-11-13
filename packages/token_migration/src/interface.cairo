@@ -14,6 +14,8 @@ pub trait ITokenMigration<T> {
     fn get_legacy_token(self: @T) -> ContractAddress;
     /// Returns the new token address.
     fn get_new_token(self: @T) -> ContractAddress;
+    /// Returns the maximum amount of tokens available for swapping (legacy -> new).
+    fn max_available_swap(self: @T) -> u256;
 }
 
 #[starknet::interface]
@@ -32,10 +34,4 @@ pub trait ITokenMigrationAdmin<T> {
     /// Enables / disables reverse swap (new tokens for legacy tokens).
     /// Caller must be the owner.
     fn allow_swap_to_legacy(ref self: T, allow_swap: bool);
-}
-
-#[starknet::interface]
-pub trait ITokenMigrationStarkGate<T> {
-    /// Returns the amount of new tokens available for swapping.
-    fn max_available_swap(self: @T) -> u256;
 }

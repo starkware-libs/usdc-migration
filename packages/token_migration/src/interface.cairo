@@ -33,5 +33,5 @@ pub trait ITokenMigrationAdmin<T> {
     fn set_batch_size(ref self: T, batch_size: u256);
     /// Enables / disables reverse swap (new tokens for legacy tokens).
     /// Caller must be the owner.
-    fn allow_swap_to_legacy(ref self: T, allow_swap: bool);
+    fn set_allow_swap_to_legacy(ref self: T, allow_swap: bool);
 }

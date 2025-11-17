@@ -32,10 +32,10 @@ use token_migration::tests::test_utils::constants::{
     INITIAL_SUPPLY, L1_RECIPIENT, L1_TOKEN_ADDRESS, LEGACY_BUFFER, OWNER_ADDRESS, TOKEN_SUPPLIER,
 };
 use token_migration::tests::test_utils::{
-    allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
-    deploy_mock_bridge, deploy_token_migration, deploy_tokens, generic_load, generic_test_fixture,
-    new_user, set_batch_size, set_legacy_buffer, set_token_supplier, supply_contract,
-    verify_l1_recipient,
+    approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances, deploy_mock_bridge,
+    deploy_token_migration, deploy_tokens, generic_load, generic_test_fixture, new_user,
+    set_allow_swap_to_legacy, set_batch_size, set_legacy_buffer, set_token_supplier,
+    supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait, WithdrawInitiated,
@@ -983,7 +983,7 @@ fn test_allow_swap_to_legacy() {
     );
 
     // Set to false and try to swap to legacy again.
-    allow_swap_to_legacy(:cfg, allow_swap: false);
+    set_allow_swap_to_legacy(:cfg, allow_swap: false);
     assert!(!token_migration.is_swap_to_legacy_allowed());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let res = token_migration_safe.swap_to_legacy(amount: amount / 2);
@@ -999,7 +999,7 @@ fn test_allow_swap_to_legacy() {
     );
 
     // Set to true and try to swap to legacy again.
-    allow_swap_to_legacy(:cfg, allow_swap: true);
+    set_allow_swap_to_legacy(:cfg, allow_swap: true);
     assert!(token_migration.is_swap_to_legacy_allowed());
     approve_and_swap_to_legacy(:cfg, :user, amount: amount / 2);
 
@@ -1023,7 +1023,7 @@ fn test_allow_swap_to_legacy_assertions() {
     };
 
     // Catch only owner.
-    let result = token_migration_admin_safe_dispatcher.allow_swap_to_legacy(allow_swap: true);
+    let result = token_migration_admin_safe_dispatcher.set_allow_swap_to_legacy(allow_swap: true);
     assert_panic_with_felt_error(:result, expected_error: OwnableErrors::NOT_OWNER);
 }
 

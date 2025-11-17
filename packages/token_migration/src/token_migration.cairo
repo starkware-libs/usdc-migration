@@ -192,7 +192,7 @@ pub mod TokenMigration {
             self.process_legacy_balance();
         }
 
-        fn allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
+        fn set_allow_swap_to_legacy(ref self: ContractState, allow_swap: bool) {
             self.ownable.assert_only_owner();
             self.allow_swap_to_legacy.write(allow_swap);
         }

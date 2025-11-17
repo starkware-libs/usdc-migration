@@ -206,12 +206,12 @@ pub(crate) fn approve_and_swap_to_legacy(
     token_migration_dispatcher.swap_to_legacy(:amount);
 }
 
-pub(crate) fn allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_swap: bool) {
+pub(crate) fn set_allow_swap_to_legacy(cfg: TokenMigrationCfg, allow_swap: bool) {
     cheat_caller_address_once(
         contract_address: cfg.token_migration_contract, caller_address: cfg.owner,
     );
     ITokenMigrationAdminDispatcher { contract_address: cfg.token_migration_contract }
-        .allow_swap_to_legacy(:allow_swap);
+        .set_allow_swap_to_legacy(:allow_swap);
 }
 
 pub(crate) fn set_token_supplier(cfg: TokenMigrationCfg, token_supplier: ContractAddress) {

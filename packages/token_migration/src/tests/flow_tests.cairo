@@ -16,8 +16,8 @@ use token_migration::tests::test_utils::constants::{
     INITIAL_SUPPLY, L1_TOKEN_ADDRESS, LEGACY_BUFFER, TOKEN_SUPPLIER,
 };
 use token_migration::tests::test_utils::{
-    allow_swap_to_legacy, approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances,
-    deploy_token_migration, generic_load, generic_test_fixture, init_token_supplier, new_user,
+    approve_and_swap_to_legacy, approve_and_swap_to_new, assert_balances, deploy_token_migration,
+    generic_load, generic_test_fixture, init_token_supplier, new_user, set_allow_swap_to_legacy,
     set_batch_size, set_legacy_buffer, set_token_supplier, supply_contract, verify_l1_recipient,
 };
 use token_migration::tests::token_bridge_mock::WithdrawInitiated;
@@ -340,7 +340,7 @@ fn test_upgrade_flow() {
 #[feature("safe_dispatcher")]
 fn test_disallow_swap_to_legacy() {
     let cfg = generic_test_fixture();
-    allow_swap_to_legacy(:cfg, allow_swap: false);
+    set_allow_swap_to_legacy(:cfg, allow_swap: false);
 
     // Try to swap to legacy.
     let amount = 100;
@@ -567,8 +567,8 @@ fn test_allow_swap_to_legacy_twice() {
     let user = new_user(id: 0, token: cfg.new_token, initial_balance: amount);
 
     // Set to false twice and try to swap.
-    allow_swap_to_legacy(:cfg, allow_swap: false);
-    allow_swap_to_legacy(:cfg, allow_swap: false);
+    set_allow_swap_to_legacy(:cfg, allow_swap: false);
+    set_allow_swap_to_legacy(:cfg, allow_swap: false);
     assert!(!token_migration.is_swap_to_legacy_allowed());
     cheat_caller_address_once(contract_address: token_migration_contract, caller_address: user);
     let result = token_migration_safe.swap_to_legacy(:amount);
@@ -581,8 +581,8 @@ fn test_allow_swap_to_legacy_twice() {
     );
 
     // Set to true twice and swap.
-    allow_swap_to_legacy(:cfg, allow_swap: true);
-    allow_swap_to_legacy(:cfg, allow_swap: true);
+    set_allow_swap_to_legacy(:cfg, allow_swap: true);
+    set_allow_swap_to_legacy(:cfg, allow_swap: true);
     assert!(token_migration.is_swap_to_legacy_allowed());
     approve_and_swap_to_legacy(:cfg, :user, :amount);
 
@@ -820,7 +820,7 @@ fn test_config_functions_before_set_token_supplier() {
     set_batch_size(:cfg, :batch_size);
     assert!(generic_load(cfg.token_migration_contract, selector!("batch_size")) == batch_size);
 
-    allow_swap_to_legacy(:cfg, allow_swap: false);
+    set_allow_swap_to_legacy(:cfg, allow_swap: false);
     assert!(!token_migration_dispatcher.is_swap_to_legacy_allowed());
 
     // Finalize setup.

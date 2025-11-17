@@ -237,12 +237,16 @@ pub mod TokenMigration {
             // Swap `amount` of legacy token for new token.
             let from_balance_before = from_token.balance_of(token_supplier);
             from_token.transfer_from(sender: user, recipient: token_supplier, :amount);
+            // Defensive check: transfer_from should panic on failure,
+            // but verify balance change in case the token contract misbehaves.
             assert(
                 from_balance_before + amount == from_token.balance_of(token_supplier),
                 Errors::TRANSFER_FROM_CALLER_FAILED,
             );
             let to_balance_before = to_token.balance_of(token_supplier);
             to_token.transfer_from(sender: token_supplier, recipient: user, :amount);
+            // Defensive check: transfer_from should panic on failure,
+            // but verify balance change in case the token contract misbehaves.
             assert(
                 to_balance_before - amount == to_token.balance_of(token_supplier),
                 Errors::TRANSFER_TO_CALLER_FAILED,

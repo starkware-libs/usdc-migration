@@ -113,6 +113,8 @@ pub mod TokenMigration {
 
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
+        /// Upgrades the contract to a new class hash.
+        /// Caller must be the owner.
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.ownable.assert_only_owner();
             self.upgradeable.upgrade(:new_class_hash);

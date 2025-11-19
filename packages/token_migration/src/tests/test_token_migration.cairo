@@ -41,7 +41,7 @@ use token_migration::tests::token_bridge_mock::{
     ITokenBridgeMockDispatcher, ITokenBridgeMockDispatcherTrait, WithdrawInitiated,
 };
 use token_migration::token_migration::TokenMigration::{
-    LARGE_BATCH_SIZE, MAX_BATCH_COUNT, SMALL_BATCH_SIZE, XL_BATCH_SIZE,
+    LARGE_BATCH_SIZE, MAX_BATCH_COUNT, SMALL_BATCH_SIZE, XL_BATCH_SIZE, XXL_BATCH_SIZE,
 };
 
 #[test]
@@ -286,6 +286,9 @@ fn test_set_batch_size_all_possible_values() {
     // XL_BATCH_SIZE.
     set_batch_size(:cfg, batch_size: XL_BATCH_SIZE);
     assert_eq!(XL_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
+    // XXL_BATCH_SIZE.
+    set_batch_size(:cfg, batch_size: XXL_BATCH_SIZE);
+    assert_eq!(XXL_BATCH_SIZE, generic_load(token_migration_contract, selector!("batch_size")));
 }
 
 #[test]

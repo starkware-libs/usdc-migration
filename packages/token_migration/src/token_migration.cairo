@@ -22,10 +22,11 @@ pub mod TokenMigration {
 
     pub(crate) const SMALL_BATCH_SIZE: u256 = 10_000_000_000_u256;
     pub(crate) const LARGE_BATCH_SIZE: u256 = 100_000_000_000_u256;
-    pub(crate) const XL_BATCH_SIZE: u256 = 1_000_000_000_000_u256;
+    pub(crate) const XL_BATCH_SIZE: u256 = 500_000_000_000_u256;
+    pub(crate) const XXL_BATCH_SIZE: u256 = 1_000_000_000_000_u256;
     /// Fixed set of batch sizes used when bridging the legacy token to L1.
-    pub(crate) const FIXED_BATCH_SIZES: [u256; 3] = [
-        SMALL_BATCH_SIZE, LARGE_BATCH_SIZE, XL_BATCH_SIZE,
+    pub(crate) const FIXED_BATCH_SIZES: [u256; 4] = [
+        SMALL_BATCH_SIZE, LARGE_BATCH_SIZE, XL_BATCH_SIZE, XXL_BATCH_SIZE,
     ];
     /// Maximum number of batches that can be sent to L1 in a single transaction.
     pub(crate) const MAX_BATCH_COUNT: u8 = 100;

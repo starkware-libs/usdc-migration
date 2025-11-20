@@ -2,10 +2,11 @@
 
 import os
 import argparse
-from web3 import Web3, Account, HTTPProvider, eth
+from web3 import Web3, HTTPProvider
+from eth_account import Account
 from web3.middleware import (
-    buffered_gas_estimate_middleware,
-    construct_sign_and_send_raw_middleware,
+    BufferedGasEstimateMiddleware,
+    SignAndSendRawMiddlewareBuilder,
 )
 
 node_uri_pat = "https://{chain}.infura.io/v3/{infura_key}"
@@ -34,10 +35,13 @@ def new_wallet_account_list(w3: Web3, eth_private_keys, name=None):
     as it creates only one middleware layer.
     """
     accounts = [Account.from_key(eth_private_key) for eth_private_key in eth_private_keys]
+    # accepts a single key/account or a list/tuple/set of them
+    signing_middleware = SignAndSendRawMiddlewareBuilder.build(accounts)
+    w3.middleware_onion.add(signing_middleware, name=name)
 
-    w3.middleware_onion.add(construct_sign_and_send_raw_middleware(accounts), name=name)
+    # default middleware name "gas_estimate" is still valid
     w3.middleware_onion.remove("gas_estimate")
-    w3.middleware_onion.add(buffered_gas_estimate_middleware, name="gas_estimate")
+    w3.middleware_onion.add(BufferedGasEstimateMiddleware, name="gas_estimate")
     return [account.address for account in accounts]
 
 
@@ -59,7 +63,7 @@ def parse_args():
         help="L1 withdrawal batching contract",
     )
     args = parser.parse_args()
-    args.batcher_contract = Web3.toChecksumAddress(args.batcher_contract)
+    args.batcher_contract = Web3.to_checksum_address(args.batcher_contract)
     return args
 
 
@@ -69,7 +73,7 @@ def main():
     node_uri = node_uri_pat.format(chain=args.chain, infura_key=os.environ["INFURA_KEY"])
     w3 = Web3(HTTPProvider(node_uri))
 
-    assert w3.isConnected()
+    assert w3.is_connected()
     w3.eth.default_account = new_wallet_account(w3, account.key)
     batcher = w3.eth.contract(address=args.batcher_contract, abi=batcher_abi)
     print(w3.eth.default_account, batcher.address)

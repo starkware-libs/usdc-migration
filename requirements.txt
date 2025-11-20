@@ -7,4 +7,4 @@ requests
 pathlib
 pytest-xdist
 git+https://github.com/starkware-libs/starkware-starknet-utils.git@main#egg=test_utils&subdirectory=python
-web3==5.31.3
+web3==7.14.0

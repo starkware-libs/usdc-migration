@@ -3,7 +3,7 @@ use constants::{
     TOKEN_SUPPLIER, TOKEN_SUPPLY,
 };
 use core::num::traits::Zero;
-use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use openzeppelin::interfaces::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
     ContractClassTrait, CustomToken, DeclareResultTrait, L1HandlerTrait, Token, TokenTrait,
     set_balance,

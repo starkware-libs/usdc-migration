@@ -1,8 +1,8 @@
 use core::num::traits::Zero;
 use openzeppelin::access::ownable::OwnableComponent::Errors as OwnableErrors;
-use openzeppelin::access::ownable::interface::{IOwnableDispatcher, IOwnableDispatcherTrait};
-use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use openzeppelin::upgrades::interface::{
+use openzeppelin::interfaces::access::ownable::{IOwnableDispatcher, IOwnableDispatcherTrait};
+use openzeppelin::interfaces::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+use openzeppelin::interfaces::upgrades::{
     IUpgradeableDispatcher, IUpgradeableDispatcherTrait, IUpgradeableSafeDispatcher,
     IUpgradeableSafeDispatcherTrait,
 };

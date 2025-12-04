@@ -6,10 +6,6 @@
 
 # Token Migration Contract
 
-$\color{red}\textbf{Diclaimer:}\text{ This repo is a work in progress. It is not yet audited.}$
-$\color{red}\text{Both the API and the implementation are still subject to changes.}$
-
-
 ## Content
 
 - [Overview](#overview)
